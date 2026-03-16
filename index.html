@@ -170,23 +170,37 @@
 
     // ── App Wrapper ───────────────────────────────────────────────────────────
     function App() {
-      const [user, setUser]     = useState(null);
+      const [user, setUser]       = useState(undefined); // undefined = טרם נבדק
       const [checking, setChecking] = useState(true);
 
       useEffect(() => {
-        // Wait for Firebase to be ready
+        let unsubscribe = null;
         const wait = setInterval(() => {
           if (window._firebase) {
             clearInterval(wait);
             const { auth, onAuthStateChanged } = window._firebase;
-            onAuthStateChanged(auth, u => { setUser(u); setChecking(false); });
+            unsubscribe = onAuthStateChanged(auth, u => {
+              setUser(u || null);
+              setChecking(false);
+            });
           }
         }, 100);
+        // timeout — אם Firebase לא נטען תוך 10 שניות, הצג כניסה
+        const timeout = setTimeout(() => {
+          clearInterval(wait);
+          setChecking(false);
+        }, 10000);
+        return () => {
+          clearInterval(wait);
+          clearTimeout(timeout);
+          if (unsubscribe) unsubscribe();
+        };
       }, []);
 
       if (checking) return (
-        <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Heebo',sans-serif", color:"#94a3b8" }}>
-          טוען...
+        <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Heebo',sans-serif", color:"#94a3b8", flexDirection:"column", gap:12 }}>
+          <div style={{ fontSize:32 }}>⏳</div>
+          <div>טוען CostPilot...</div>
         </div>
       );
 
