@@ -4512,7 +4512,28 @@ function AppInner({ currentUser }) {
 }
 
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    // Add global error handler
+    window.addEventListener('error', e => {
+      console.error('Global error:', e.message, e.filename, e.lineno);
+    });
+
+    class ErrorBoundary extends React.Component {
+      constructor(props) { super(props); this.state = { error: null }; }
+      componentDidCatch(error) { this.setState({ error: error.message }); }
+      render() {
+        if (this.state.error) return (
+          <div style={{padding:40, fontFamily:"'Heebo',sans-serif", color:"#ef4444", direction:"rtl"}}>
+            <h2>שגיאה באפליקציה</h2>
+            <pre style={{fontSize:12, color:"#64748b"}}>{this.state.error}</pre>
+          </div>
+        );
+        return this.props.children;
+      }
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(
+      <ErrorBoundary><App /></ErrorBoundary>
+    );
   </script>
 </body>
 </html>
