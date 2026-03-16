@@ -3659,10 +3659,6 @@ function OpeningTab({ data, setData, budgetState, setBudgetState, statsRows }) {
 function AppInner({ currentUser, userRole, setUserRole }) {
   const uid = currentUser.uid;
   const isAdmin = (userRole?.role === "admin") || false;
-  // סינון פרויקטים לפי הרשאה
-  const visibleProjects = isAdmin
-    ? projects
-    : projects.filter(p => ((userRole?.projects) || []).includes(String(p.id)));
 
   const [projects, setProjects] = useState([]);
 
@@ -3676,6 +3672,11 @@ function AppInner({ currentUser, userRole, setUserRole }) {
 
   const [allData, setAllData] = useState({});
   const [dataLoaded, setDataLoaded] = useState(false);
+
+  // סינון פרויקטים לפי הרשאה — אחרי שה-state מוגדר
+  const visibleProjects = isAdmin
+    ? projects
+    : projects.filter(p => ((userRole?.projects) || []).includes(String(p.id)));
 
   // Load from Firestore on mount
   useEffect(() => {
