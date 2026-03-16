@@ -3658,11 +3658,11 @@ function OpeningTab({ data, setData, budgetState, setBudgetState, statsRows }) {
 
 function AppInner({ currentUser, userRole, setUserRole }) {
   const uid = currentUser.uid;
-  const isAdmin = userRole?.role === "admin";
+  const isAdmin = (userRole?.role === "admin") || false;
   // סינון פרויקטים לפי הרשאה
   const visibleProjects = isAdmin
     ? projects
-    : projects.filter(p => (userRole?.projects || []).includes(String(p.id)));
+    : projects.filter(p => ((userRole?.projects) || []).includes(String(p.id)));
 
   const [projects, setProjects] = useState([]);
 
