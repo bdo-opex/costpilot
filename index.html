@@ -4239,10 +4239,10 @@ function AppInner({ currentUser, userRole, setUserRole }) {
         {!selectedProj && globalPage === "dashboard" && (
           <DashboardPage
             allData={allData}
-            projects={projects}
+            projects={visibleProjects}
             milestones={milestones}
             onNavigate={(projId, tab, fieldId, consultantId, increaseId, invoiceId) => {
-              const proj = projects.find(p => p.id === projId);
+              const proj = visibleProjects.find(p => p.id === projId);
               if (proj) {
                 setSelectedProj(proj);
                 setActiveTab(tab || "budget");
@@ -4282,11 +4282,11 @@ function AppInner({ currentUser, userRole, setUserRole }) {
         )}
 
         {!selectedProj && globalPage === "maininfo" && (
-          <MainInfoPage allData={allData} projects={projects} companies={companies} setAllData={setAllData} setProjects={p=>{setProjects(p);saveProjects(p);}}
+          <MainInfoPage allData={allData} projects={visibleProjects} companies={companies} setAllData={setAllData} setProjects={p=>{setProjects(p);saveProjects(p);}}
             onNavigate={proj => { setSelectedProj(proj); setActiveTab("budget"); setGlobalPage(null); }} />
         )}
         {!selectedProj && globalPage === "costs" && (
-          <CostsPage allData={allData} projects={projects} statsRows={statsRows} />
+          <CostsPage allData={allData} projects={visibleProjects} statsRows={statsRows} />
         )}
         {!selectedProj && !globalPage && (
           <div className="fade" style={{ padding:"34px 38px" }}>
@@ -4308,17 +4308,17 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                 </div>
                 <PrimaryButton small onClick={() => setShowModal(true)}>+ פרויקט חדש</PrimaryButton>
               </div>
-              {projects.length === 0 && <div style={{ padding:32, textAlign:"right", color:"#94a3b8" }}>אין פרויקטים עדיין</div>}
+              {visibleProjects.length === 0 && <div style={{ padding:32, textAlign:"right", color:"#94a3b8" }}>אין פרויקטים עדיין</div>}
               {(() => {
                 const q = projSearch.trim().toLowerCase();
-                const filtered = q ? projects.filter(p => {
+                const filtered = q ? visibleProjects.filter(p => {
                   const companyName = companies.find(c => String(c.id) === String(allData[p.id]?.companyId))?.name || "";
                   return p.name.toLowerCase().includes(q) || companyName.toLowerCase().includes(q);
-                }) : projects;
+                }) : visibleProjects;
                 return filtered.map((p, i) => (
                 <div key={p.id} className="hov-row"
                   onClick={() => { setSelectedProj(p); setActiveTab("budget"); setGlobalPage(null); }}
-                  style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 22px", borderBottom:i<projects.length-1?"1px solid #f1f5f9":"none", cursor:"pointer", transition:"background .15s" }}>
+                  style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 22px", borderBottom:i<visibleProjects.length-1?"1px solid #f1f5f9":"none", cursor:"pointer", transition:"background .15s" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:13 }}>
                     <div style={{ width:42, height:42, borderRadius:11, background:"linear-gradient(135deg,#dbeafe,#bfdbfe)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🏗️</div>
                     <div>
