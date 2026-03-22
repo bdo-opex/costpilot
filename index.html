@@ -1697,7 +1697,7 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
     setConsultantsRows(prev => prev.map(r => r.id === id ? { ...r, noClaims: val } : r));
   };
 
-  const rowTotal = key => getInvoices(key).reduce((s,r)=>s+Number(r.amount||0),0);
+  const rowTotal = key => getInvoices(key).filter(r => r.unitManagerApproved && !r.rejected).reduce((s,r)=>s+Number(r.amount||0),0);
 
   // ── Negative increases: recalculate unpaid milestones based on new total fee ─
   // negativeDeductions: { milestoneKey → amount to deduct from original baseAmt }
