@@ -3370,12 +3370,13 @@ function DashboardPage({ allData, projects, onNavigate, milestones }) {
           label: con.name, value: x.amount, payType:"סכום קבוע", type:"increase", tab:"consultants",
           consultantId: con.id, increaseId: x.id, fieldId: null, tooltip: x.reason,
           createdAt: x.createdAt || x.id };
-        if (!x.sentToManager && !x.approvedIncrease)
-          zoneA.push({ ...base, key:`iz1-${proj.id}-${con.id}-${x.id}` });
-        else if (x.sentToManager && !x.sentToMunicipality && !x.approvedIncrease)
-          zone2.push({ ...base, key:`iz2-${proj.id}-${con.id}-${x.id}` });
+        if (x.approvedIncrease) return;
+        if (!x.sentToManager)
+          zoneB.push({ ...base, key:`iz1-${proj.id}-${con.id}-${x.id}` });
+        else if (x.sentToManager && !x.sentToMunicipality)
+          zoneUM.push({ ...base, key:`iz2-${proj.id}-${con.id}-${x.id}` });
         else if (x.sentToMunicipality && !x.approvedIncrease)
-          zone3.push({ ...base, key:`iz3-${proj.id}-${con.id}-${x.id}` });
+          zone2.push({ ...base, key:`iz3-${proj.id}-${con.id}-${x.id}` });
       });
     });
 
