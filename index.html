@@ -3335,7 +3335,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones }) {
   // Zone C: הוחזר ליועץ לתיקון
   // Zone 2: ממתין להעברה לחברה העירונית
   // Zone 3: ממתין לאישור החברה העירונית
-  const zoneA = [], zoneB = [], zoneC = [], zoneUM = [], zone2 = [], zone3 = [];
+  const zoneA = [], zoneB = [], zoneC = [], zoneUM = [], zoneSend = [], zone2 = [], zone3 = [];
 
   projects.forEach(proj => {
     // ── Consultant quotes ──
@@ -3351,7 +3351,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones }) {
             createdAt: Math.min(...namedConsultants.map(c => c.createdAt || c.id)) });
       }
       field.consultants.filter(c => c.name?.trim() && c.recommended && !c.sentToMunicipality && !c.approved).forEach(c =>
-        zone2.push({ projId: proj.id, projName: proj.name, fieldId: field.id, fieldName: field.fieldName,
+        zoneSend.push({ projId: proj.id, projName: proj.name, fieldId: field.id, fieldName: field.fieldName,
           label: c.name, value: c.value, payType: c.payType, type:"consultant", key: `z2-${proj.id}-${field.id}-${c.id}`, tab:"quotes",
           createdAt: c.createdAt || c.id })
       );
@@ -3494,6 +3494,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones }) {
     { title:"ממתין לאישור מנהל פרויקט",                    items:zoneB, color:"#0891b2", bg:"#ecfeff", border:"#a5f3fc", icon:"👤", emptyText:"אין חשבונות הממתינים לאישור מנהל פרויקט" },
     { title:"ממתין לאישור מנהל יחידה",                     items:zoneUM, color:"#7c3aed", bg:"#f5f3ff", border:"#c4b5fd", icon:"👔", emptyText:"אין חשבונות הממתינים לאישור מנהל יחידה" },
     { title:"הוחזר ליועץ לתיקון",                           items:zoneC, color:"#dc2626", bg:"#fef2f2", border:"#fecaca", icon:"↩️", emptyText:"אין חשבונות שהוחזרו ליועץ" },
+    { title:"ממתין להעברה לחברה העירונית",                  items:zoneSend, color:"#0369a1", bg:"#f0f9ff", border:"#7dd3fc", icon:"📋", emptyText:"אין יועצים הממתינים להעברה" },
     { title:"ממתין לאישור מזמין",                           items:zone2, color:"#334155", bg:"#eff6ff", border:"#bfdbfe", icon:"📤", emptyText:"אין פריטים הממתינים לאישור מזמין" },
   ];
 
