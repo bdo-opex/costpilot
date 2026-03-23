@@ -2783,6 +2783,9 @@ function MilestonesPage({ companies, milestones, setMilestones, professions }) {
   const [newPlanOnly, setNewPlanOnly] = useState(false);
   const [editId,      setEditId]      = useState(null);
   const [editData,    setEditData]    = useState({});
+  const [copyFromCompany, setCopyFromCompany] = useState("");
+  const [copyFromProf,    setCopyFromProf]    = useState("");
+  const [showCopy,        setShowCopy]        = useState(false);
 
   // All professions = stats professions + any custom ones already used in this company
   const existingCompanyProfs = selCompany
@@ -2876,12 +2879,53 @@ function MilestonesPage({ companies, milestones, setMilestones, professions }) {
       {selCompany && selProf && (
         <>
           <Card style={{ padding:0, overflow:"hidden" }}>
-            <div style={{ padding:"12px 20px", borderBottom:"1px solid #e8edf4", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div style={{ padding:"12px 20px", borderBottom:"1px solid #e8edf4", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
               <span style={{ fontWeight:700, color:"#1e293b" }}>
                 {companies.find(c=>c.id==selCompany)?.name} — {selProf}
               </span>
-              <Badge color="#2563eb">{companyMilestones.length} אבני דרך</Badge>
+              <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                <Badge color="#2563eb">{companyMilestones.length} אבני דרך</Badge>
+                <button onClick={()=>setShowCopy(!showCopy)}
+                  style={{ background:"#f0f9ff", color:"#0369a1", border:"1px solid #7dd3fc", borderRadius:7, padding:"4px 12px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>
+                  📋 העתק מחברה אחרת
+                </button>
+              </div>
             </div>
+            {showCopy && (
+              <div style={{ padding:"12px 20px", background:"#f0f9ff", borderBottom:"1px solid #bae6fd", display:"flex", gap:12, alignItems:"flex-end", flexWrap:"wrap" }}>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:600, color:"#0369a1", marginBottom:4 }}>חברה עירונית</div>
+                  <select value={copyFromCompany} onChange={e=>{ setCopyFromCompany(e.target.value); setCopyFromProf(""); }}
+                    style={{ padding:"7px 10px", border:"1px solid #7dd3fc", borderRadius:7, fontSize:13, fontFamily:"'Heebo',sans-serif", background:"#fff", outline:"none" }}>
+                    <option value="">-- בחר --</option>
+                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                {copyFromCompany && (
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:600, color:"#0369a1", marginBottom:4 }}>מקצוע</div>
+                    <select value={copyFromProf} onChange={e=>setCopyFromProf(e.target.value)}
+                      style={{ padding:"7px 10px", border:"1px solid #7dd3fc", borderRadius:7, fontSize:13, fontFamily:"'Heebo',sans-serif", background:"#fff", outline:"none" }}>
+                      <option value="">-- בחר --</option>
+                      {Object.keys(milestones[copyFromCompany]||{}).map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                )}
+                {copyFromCompany && copyFromProf && (
+                  <button onClick={() => {
+                    const source = milestones[copyFromCompany]?.[copyFromProf] || [];
+                    const copied = source.map(m => ({ ...m, id: Date.now() + Math.random() }));
+                    upd([...companyMilestones, ...copied]);
+                    setShowCopy(false); setCopyFromCompany(""); setCopyFromProf("");
+                  }}
+                    style={{ background:"#0369a1", color:"#fff", border:"none", borderRadius:7, padding:"7px 16px", fontSize:13, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>
+                    העתק ({(milestones[copyFromCompany]?.[copyFromProf]||[]).length} אבני דרך)
+                  </button>
+                )}
+                <button onClick={()=>{ setShowCopy(false); setCopyFromCompany(""); setCopyFromProf(""); }}
+                  style={{ background:"#f1f5f9", color:"#64748b", border:"none", borderRadius:7, padding:"7px 12px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>ביטול</button>
+              </div>
+            )}
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
               <thead>
                 <tr style={{ background:"#f8fafc", borderBottom:"2px solid #e2e8f0" }}>
