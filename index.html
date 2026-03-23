@@ -3371,12 +3371,6 @@ function DashboardPage({ allData, projects, onNavigate, milestones }) {
           consultantId: con.id, increaseId: x.id, fieldId: null, tooltip: x.reason,
           createdAt: x.createdAt || x.id };
         if (x.approvedIncrease) return;
-        if (!x.sentToManager)
-          zoneB.push({ ...base, key:`iz1-${proj.id}-${con.id}-${x.id}` });
-        else if (x.sentToManager && !x.sentToMunicipality)
-          zoneUM.push({ ...base, key:`iz2-${proj.id}-${con.id}-${x.id}` });
-        else if (x.sentToMunicipality && !x.approvedIncrease)
-          zone2.push({ ...base, key:`iz3-${proj.id}-${con.id}-${x.id}` });
       });
     });
 
