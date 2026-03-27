@@ -4277,13 +4277,15 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(contractorRows), "חשבון קבלן סופי");
 
-    const wbout = XLSX.write(wb, { bookType:"xlsx", type:"base64" });
+    const wbout = XLSX.write(wb, { bookType:"xlsx", type:"array" });
+    const blob = new Blob([wbout], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," + wbout;
+    a.href = url;
     a.download = `${proj.name}.xlsx`;
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
+    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 100);
   };
 
   // ── Backup all data to JSON ──────────────────────────────────────────────
