@@ -2479,7 +2479,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                             <tr style={{ borderBottom:"1px solid #f1f5f9" }}>
                               <td style={{ padding:"7px 10px", fontSize:13, color:"#1e293b" }}>תקורות חברה עירונית</td>
                               <td style={{ padding:"7px 10px" }}>
-                                <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end" }}>
+                                <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-start" }}>
                                   <span style={{ fontSize:11, color:"#64748b" }}>%</span>
                                   <input type="number" value={bs.overheadPct||""} onChange={e=>upd("overheadPct",e.target.value)} style={{...inputStyle, width:50, textAlign:"right"}} />
                                 </div>
@@ -2495,7 +2495,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                             <tr style={{ borderBottom:"1px solid #f1f5f9", background:"#fafbfd" }}>
                               <td style={{ padding:"7px 10px", fontSize:13, color:"#1e293b" }}>בצ״מ</td>
                               <td style={{ padding:"7px 10px" }}>
-                                <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end" }}>
+                                <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-start" }}>
                                   <span style={{ fontSize:11, color:"#64748b" }}>%</span>
                                   <input type="number" value={bs.bcmPct||""} onChange={e=>upd("bcmPct",e.target.value)} style={{...inputStyle, width:50, textAlign:"right"}} placeholder="" />
                                 </div>
@@ -2511,7 +2511,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                             <tr style={{ borderBottom:"1px solid #f1f5f9" }}>
                               <td style={{ padding:"7px 10px", fontSize:13, color:"#1e293b" }}>מע״מ</td>
                               <td style={{ padding:"7px 10px" }}>
-                                <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end" }}>
+                                <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-start" }}>
                                   <span style={{ fontSize:11, color:"#64748b" }}>%</span>
                                   <input type="number" value={bs.vatPct||18} onChange={e=>upd("vatPct",e.target.value)} style={{...inputStyle, width:50, textAlign:"right"}} />
                                 </div>
