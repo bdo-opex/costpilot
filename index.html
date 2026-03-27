@@ -4069,6 +4069,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
   const exportProjectToExcel = (proj) => {
     const XLSX = window.XLSX;
     if (!XLSX) { alert("ספריית Excel לא נטענה, נסה שוב"); return; }
+    try {
     const d = allData[proj.id] || {};
     const o = d.openingData || {};
     const bs = d.budgetState || {};
@@ -4223,7 +4224,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     });
 
     // אגרות
-    const _feeRows = bs.feeRows || ["פיצויי נופי","מי אביבים - לא דמי הקמה","כיבוי אש","\u05D7\u05D7\u05F3\u05D9","בזק","הוט","רשות העתיקות","תיק מידע"].map(name=>({name,contract:"",paid:"",noClaims:false,notes:""}));
+    const _feeRows = bs.feeRows || ["פיצויי נופי","מי אביבים - לא דמי הקמה","כיבוי אש","חח'י","בזק","הוט","רשות העתיקות","תיק מידע"].map(name=>({name,contract:"",paid:"",noClaims:false,notes:""}));
     const _allFeeRows = [..._feeRows, ...(bs.extraFeeRows||[])];
     budgetRows.push([]);
     budgetRows.push(["אגרות","","","","","","",""]);
@@ -4233,13 +4234,13 @@ function AppInner({ currentUser, userRole, setUserRole }) {
       _feeTot+=_c; _feePaid+=_p;
       budgetRows.push(["אגרות",r.name||"",_c||"",_p||"",r.noClaims?0:_c-_p,_c||"",r.noClaims?"כן":"לא",r.notes||""]);
     });
-    budgetRows.push(["סה\u05F4כ אגרות","",_feeTot,_feePaid,_feeTot-_feePaid,"","",""]);
+    budgetRows.push(["סה כ אגרות","",_feeTot,_feePaid,_feeTot-_feePaid,"","",""]);
     // קבלן
     const _cc=Number(bs.contractorContract||0), _cp=Number(bs.contractorPaid||0);
     budgetRows.push([]);
     budgetRows.push(["קבלן","","","","","","",""]);
     budgetRows.push(["קבלן","קבלן ראשי",_cc||"",_cp||"",_cc-_cp,_cc||"","",bs.contractorNotes||""]);
-    budgetRows.push(["סה\u05F4כ קבלן","",_cc,_cp,_cc-_cp,"","",""]);
+    budgetRows.push(["סה כ קבלן","",_cc,_cp,_cc-_cp,"","",""]);
     // תקורות
     const _consTotal = exportAllRows.reduce((s,r)=>s+(r.payType==="אחוזים"?r.computedFee:r.value)+r.increases,0);
     const _base = _consTotal+_feeTot+_cc;
@@ -4249,15 +4250,15 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     const _ohTot=_oAmt+_bAmt+_vAmt;
     budgetRows.push([]);
     budgetRows.push(["תקורות","","","","","","",""]);
-    budgetRows.push(["תקורות","\u05EA\u05E7\u05D5\u05E8\u05D5\u05EA \u05D7\u05D1\u05E8\u05D4 \u05E2\u05D9\u05E8\u05D5\u05E0\u05D9\u05EA ("+_oPct+"%)",_oAmt,_oPaid,_oAmt-_oPaid,"","",bs.overheadNotes||""]);
-    budgetRows.push(["תקורות","\u05D1\u05E6\u05F4\u05DE ("+_bPct+"%)",_bAmt,_bPaid,_bAmt-_bPaid,"","",bs.bcmNotes||""]);
-    budgetRows.push(["תקורות","\u05DE\u05E2\u05F4\u05DE ("+_vPct+"%)",_vAmt,_vPaid,_vAmt-_vPaid,"","",bs.vatNotes||""]);
-    budgetRows.push(["סה\u05F4כ תקורות","",_ohTot,_oPaid+_bPaid+_vPaid,_ohTot-(_oPaid+_bPaid+_vPaid),"","",""]);
-    // סה"כ כללי
+    budgetRows.push(["תקורות","תקורות חברה עירונית ("+_oPct+"%)",_oAmt,_oPaid,_oAmt-_oPaid,"","",bs.overheadNotes||""]);
+    budgetRows.push(["תקורות","בצמ ("+_bPct+"%)",_bAmt,_bPaid,_bAmt-_bPaid,"","",bs.bcmNotes||""]);
+    budgetRows.push(["תקורות","מעמ ("+_vPct+"%)",_vAmt,_vPaid,_vAmt-_vPaid,"","",bs.vatNotes||""]);
+    budgetRows.push(["סה כ תקורות","",_ohTot,_oPaid+_bPaid+_vPaid,_ohTot-(_oPaid+_bPaid+_vPaid),"","",""]);
+    // סה כ כללי
     const _grandTot=_consTotal+_feeTot+_cc+_ohTot;
     const _grandPaid=exportAllRows.reduce((s,r)=>s+(r.paid||0),0)+_feePaid+_cp+_oPaid+_bPaid+_vPaid;
     budgetRows.push([]);
-    budgetRows.push(["סה\u05F4כ כללי","",_grandTot,_grandPaid,_grandTot-_grandPaid,"","",""]);
+    budgetRows.push(["סה כ כללי","",_grandTot,_grandPaid,_grandTot-_grandPaid,"","",""]);
 
     const budgetWsFinal = XLSX.utils.aoa_to_sheet(budgetRows);
     XLSX.utils.book_append_sheet(wb, budgetWsFinal, "תקציב הפרויקט");
@@ -4278,14 +4279,15 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(contractorRows), "חשבון קבלן סופי");
 
     const wbout = XLSX.write(wb, { bookType:"xlsx", type:"array" });
-    const blob = new Blob([wbout], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const blob = new Blob([wbout], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `${proj.name}.xlsx`;
     document.body.appendChild(a);
     a.click();
-    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 100);
+    setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+    } catch(e) { alert("שגיאה: " + e.message); }
   };
 
   // ── Backup all data to JSON ──────────────────────────────────────────────
