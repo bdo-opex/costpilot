@@ -4187,103 +4187,90 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     });
 
     const toNum = (v) => { const n = Number(String(v||"").replace(/,/g,"").replace(/[^\d.\-]/g,"")); return isNaN(n) ? "" : n; };
-    const budgetRows = [
-      ["סעיף","ערך"],
-      ["אומדן עירוני",       toNum(o.municipalEst  || bs.municipalEst)],
-      ["אומדן קבלני",        toNum(o.contractorEst || bs.contractorEst)],
-      ["כתב כמויות / מכרז", toNum(bs.tenderDocs)],
-      ["חשבון קבלן סופי",   toNum(bs.finalAccount)],
-      ["אישור בפועל",        toNum(bs.approvalActual)],
-      ["קיזוז דמי הקמה",    toNum(bs.setupOffset)],
-    ];
-    (bs.extraItems||[]).forEach(x => budgetRows.push([x.desc||"תקציב שהתקבל", toNum(x.amount)]));
-    budgetRows.push([]);
-    budgetRows.push(["פירוט תקציב הפרויקט",""]);
-    budgetRows.push(["שם המקצוע","שם היועץ","סכום התקשרות","סכום מצטבר ששולם","יתרה לתשלום","סכום התקשרות לשלב התכנון","העדר תביעות","הערות"]);
 
-    // כותבים ישירות את השדות שכבר נמצאים ב-exportAllRows — בלי שום חישוב נוסף
-    // budgetRows.length כאן = מספר השורות כולל כותרת הפירוט = index הראשון של נתוני יועצים (0-based)
-    const detailDataStartRow = budgetRows.length; // זה ה-row index (0-based) של שורת יועצים ראשונה
+    // ── טבלה אחת רציפה עם 8 עמודות קבועות ──
+    // עמודות: שם המקצוע | שם היועץ/תיאור | סכום התקשרות | סכום מצטבר ששולם | יתרה לתשלום | סכום לשלב התכנון | העדר תביעות | הערות
+    const COL = ["שם המקצוע / סעיף","שם היועץ / תיאור","סכום התקשרות","סכום מצטבר ששולם","יתרה לתשלום","סכום לשלב התכנון","העדר תביעות","הערות"];
+    const budgetRows = [COL];
 
+    // ── אומדנים ──
+    budgetRows.push(["── אומדנים ──","","","","","","",""]);
+    budgetRows.push(["אומדן עירוני",    toNum(o.municipalEst  || bs.municipalEst),"","","","","",""]);
+    budgetRows.push(["אומדן קבלני",     toNum(o.contractorEst || bs.contractorEst),"","","","","",""]);
+    budgetRows.push(["כתב כמויות / מכרז", toNum(bs.tenderDocs),"","","","","",""]);
+    budgetRows.push(["חשבון קבלן סופי", toNum(bs.finalAccount),"","","","","",""]);
+    budgetRows.push(["אישור בפועל",     toNum(bs.approvalActual),"","","","","",""]);
+    budgetRows.push(["קיזוז דמי הקמה", toNum(bs.setupOffset),"","","","","",""]);
+    (bs.extraItems||[]).forEach(x => budgetRows.push([x.desc||"תקציב שהתקבל", toNum(x.amount),"","","","","",""]));
+
+    // ── יועצים ──
+    budgetRows.push(["── יועצים ──","","","","","","",""]);
     exportAllRows.forEach(r => {
       const baseFee   = r.payType === "אחוזים" ? r.computedFee : r.value;
       const totalFee  = baseFee + r.increases;
       const remaining = totalFee - r.paid;
       const hasBase   = !!Number(exportBState.contractorEst||0) || r.payType !== "אחוזים";
       budgetRows.push([
-        r.field,
-        r.name,
+        r.field, r.name,
         !hasBase ? (r.value + "%") : totalFee,
         r.paid,
         !hasBase ? "" : remaining,
         r.planOnly > 0 ? r.planOnly : "",
         r.noClaims ? "כן" : "לא",
-        r.notes,
+        r.notes||"",
       ]);
     });
+    const consultantsTotalExport = exportAllRows.reduce((s,r) => s + (r.payType==="אחוזים" ? r.computedFee : r.value) + r.increases, 0);
+    const consultantsPaidExport  = exportAllRows.reduce((s,r) => s + (r.paid||0), 0);
+    budgetRows.push(["סה״כ יועצים","", consultantsTotalExport, consultantsPaidExport, consultantsTotalExport - consultantsPaidExport,"","",""]);
 
     // ── אגרות ──
     const FIXED_FEES_EXPORT = ["פיצויי נופי","מי אביבים - לא דמי הקמה","כיבוי אש","חח\"י","בזק","הוט","רשות העתיקות","תיק מידע"];
-    const extraFeeRows = bs.extraFeeRows || [];
-    const feeRowsArr = bs.feeRows || FIXED_FEES_EXPORT.map(name => ({ id:name, name, contract:"", paid:"", planOnly:"", noClaims:false, notes:"" }));
-    const allFeeRowsExport = [...feeRowsArr, ...extraFeeRows];
-
-    budgetRows.push([]);
-    budgetRows.push(["אגרות","","","","","","",""]);
-    budgetRows.push(["שם","סכום התקשרות","סכום ששולם","יתרה לתשלום","סכום לשלב התכנון","","","הערות"]);
+    const feeRowsArr = bs.feeRows || FIXED_FEES_EXPORT.map(name => ({ id:name, name, contract:"", paid:"", noClaims:false, notes:"" }));
+    const allFeeRowsExport = [...feeRowsArr, ...(bs.extraFeeRows||[])];
+    budgetRows.push(["── אגרות ──","","","","","","",""]);
     let feeTotalContractExport = 0, feeTotalPaidExport = 0;
     allFeeRowsExport.forEach(r => {
       const contract = Number(r.contract||0);
-      const paid = Number(r.paid||0);
-      const rem = r.noClaims ? 0 : contract - paid;
+      const paid     = Number(r.paid||0);
+      const rem      = r.noClaims ? 0 : contract - paid;
       feeTotalContractExport += contract;
-      feeTotalPaidExport += paid;
-      budgetRows.push([r.name||"", contract||"", paid||"", rem||"", contract||"", "", "", r.notes||""]);
+      feeTotalPaidExport     += paid;
+      budgetRows.push(["אגרות", r.name||"", contract||"", paid||"", rem||"", contract||"", r.noClaims?"כן":"לא", r.notes||""]);
     });
-    budgetRows.push(["סה״כ אגרות", feeTotalContractExport, feeTotalPaidExport, feeTotalContractExport - feeTotalPaidExport, "", "", "", ""]);
+    budgetRows.push(["סה״כ אגרות","", feeTotalContractExport, feeTotalPaidExport, feeTotalContractExport - feeTotalPaidExport,"","",""]);
 
     // ── קבלן ──
     const contractorContract = Number(bs.contractorContract||0);
-    const contractorPaid = Number(bs.contractorPaid||0);
-    const contractorRem = contractorContract - contractorPaid;
-    budgetRows.push([]);
-    budgetRows.push(["קבלן","","","","","","",""]);
-    budgetRows.push(["קבלן ראשי", contractorContract||"", contractorPaid||"", contractorRem||"", contractorContract||"", "", "", bs.contractorNotes||""]);
-    budgetRows.push(["סה״כ קבלן", contractorContract, contractorPaid, contractorRem, "", "", "", ""]);
+    const contractorPaid     = Number(bs.contractorPaid||0);
+    const contractorRem      = contractorContract - contractorPaid;
+    budgetRows.push(["── קבלן ──","","","","","","",""]);
+    budgetRows.push(["קבלן","קבלן ראשי", contractorContract||"", contractorPaid||"", contractorRem||"", contractorContract||"","", bs.contractorNotes||""]);
+    budgetRows.push(["סה״כ קבלן","", contractorContract, contractorPaid, contractorRem,"","",""]);
 
     // ── תקורות ──
-    const consultantsTotalExport = exportAllRows.reduce((s,r) => s + (r.payType==="אחוזים" ? r.computedFee : r.value) + r.increases, 0);
-    const baseForOverhead = consultantsTotalExport + feeTotalContractExport + contractorContract;
-    const overheadPct = Number(bs.overheadPct||4);
-    const overheadAmt = baseForOverhead * overheadPct / 100;
-    const overheadPaid = Number(bs.overheadPaid||0);
-    const overheadRem = overheadAmt - overheadPaid;
-    const bcmBase = baseForOverhead + overheadAmt;
-    const bcmPct = Number(bs.bcmPct||0);
-    const bcmAmt = bcmBase * bcmPct / 100;
-    const bcmPaid = Number(bs.bcmPaid||0);
-    const bcmRem = bcmAmt - bcmPaid;
-    const vatPct = Number(bs.vatPct||18);
-    const vatBase = bcmBase + bcmAmt;
-    const vatAmt = vatBase * vatPct / 100;
-    const vatPaid = Number(bs.vatPaid||0);
-    const vatRem = vatAmt - vatPaid;
-    const overheadTotalAmt = overheadAmt + bcmAmt + vatAmt;
-    const grandTotalContract = consultantsTotalExport + feeTotalContractExport + contractorContract + overheadTotalAmt;
-    const grandTotalPaid = exportAllRows.reduce((s,r)=>s+(r.paid||0),0) + feeTotalPaidExport + contractorPaid + overheadPaid + bcmPaid + vatPaid;
-    const grandTotalRem = grandTotalContract - grandTotalPaid;
-
-    budgetRows.push([]);
-    budgetRows.push(["תקורות","","","","","","",""]);
-    budgetRows.push(["שם","אחוז","סכום התקשרות","סכום ששולם","יתרה","","","הערות"]);
-    budgetRows.push(["תקורות חברה עירונית", overheadPct+"%", overheadAmt, overheadPaid, overheadRem, "", "", bs.overheadNotes||""]);
-    budgetRows.push(["בצ״מ", bcmPct+"%", bcmAmt, bcmPaid, bcmRem, "", "", bs.bcmNotes||""]);
-    budgetRows.push(["מע״מ", vatPct+"%", vatAmt, vatPaid, vatRem, "", "", bs.vatNotes||""]);
-    budgetRows.push(["סה״כ תקורות", "", overheadTotalAmt, overheadPaid+bcmPaid+vatPaid, overheadRem+bcmRem+vatRem, "", "", ""]);
+    const baseForOverhead   = consultantsTotalExport + feeTotalContractExport + contractorContract;
+    const overheadPct       = Number(bs.overheadPct||4);
+    const overheadAmt       = baseForOverhead * overheadPct / 100;
+    const overheadPaid      = Number(bs.overheadPaid||0);
+    const bcmBase           = baseForOverhead + overheadAmt;
+    const bcmPct            = Number(bs.bcmPct||0);
+    const bcmAmt            = bcmBase * bcmPct / 100;
+    const bcmPaid           = Number(bs.bcmPaid||0);
+    const vatPct            = Number(bs.vatPct||18);
+    const vatAmt            = (bcmBase + bcmAmt) * vatPct / 100;
+    const vatPaid           = Number(bs.vatPaid||0);
+    const overheadTotalAmt  = overheadAmt + bcmAmt + vatAmt;
+    budgetRows.push(["── תקורות ──","","","","","","",""]);
+    budgetRows.push(["תקורות","תקורות חברה עירונית ("+overheadPct+"%)", overheadAmt, overheadPaid, overheadAmt-overheadPaid,"","", bs.overheadNotes||""]);
+    budgetRows.push(["תקורות","בצ״מ ("+bcmPct+"%)", bcmAmt, bcmPaid, bcmAmt-bcmPaid,"","", bs.bcmNotes||""]);
+    budgetRows.push(["תקורות","מע״מ ("+vatPct+"%)", vatAmt, vatPaid, vatAmt-vatPaid,"","", bs.vatNotes||""]);
+    budgetRows.push(["סה״כ תקורות","", overheadTotalAmt, overheadPaid+bcmPaid+vatPaid, overheadTotalAmt-(overheadPaid+bcmPaid+vatPaid),"","",""]);
 
     // ── סה"כ כללי ──
-    budgetRows.push([]);
-    budgetRows.push(["סה״כ כללי", "", grandTotalContract, grandTotalPaid, grandTotalRem, "", "", ""]);
+    const grandTotalContract = consultantsTotalExport + feeTotalContractExport + contractorContract + overheadTotalAmt;
+    const grandTotalPaid     = consultantsPaidExport + feeTotalPaidExport + contractorPaid + overheadPaid + bcmPaid + vatPaid;
+    budgetRows.push(["סה״כ כללי","", grandTotalContract, grandTotalPaid, grandTotalContract - grandTotalPaid,"","",""]);
 
     const budgetWsFinal = XLSX.utils.aoa_to_sheet(budgetRows);
     XLSX.utils.book_append_sheet(wb, budgetWsFinal, "תקציב הפרויקט");
