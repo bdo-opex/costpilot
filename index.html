@@ -2156,7 +2156,8 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
 
-      {/* ── Estimation table (wide) ── */}
+      {/* ── Estimation table + utilization widget ── */}
+      <div style={{ display:"flex", alignItems:"flex-start", gap:16, flexWrap:"wrap" }}>
       <div style={{ fontSize:13 }}>
         <table style={{ borderCollapse:"collapse", direction:"rtl", tableLayout:"fixed", width:"640px", background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"hidden" }}>
           <colgroup>
@@ -2174,15 +2175,15 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
             </tr>
           </thead>
           <tbody>
-            {/* אומדן עירוני / אישור בפועל */}
+            {/* אומדן עירוני / אישור ממונה עירוני */}
             <tr style={{ borderBottom:"1px solid #f1f5f9" }}>
               <td style={{ padding:"8px 14px", color:"#374151", textAlign:"right", borderLeft:"1px solid #e2e8f0", whiteSpace:"nowrap" }}>אומדן עירוני</td>
               <td style={{ padding:"5px 10px", borderLeft:"1px solid #e2e8f0" }}>
                 {(() => { const v = Number(String((openingData||{}).municipalEst||"").replace(/,/g,"").replace(/[^\d.]/g,"")); return <div style={{ textAlign:"right", background:"#f1f5f9", border:"1px solid #e2e8f0", borderRadius:6, padding:"4px 8px", color:v?"#1e293b":"#94a3b8" }}>{v?v.toLocaleString("en-US"):"לא הוזן"}</div>; })()}
               </td>
-              <td style={{ padding:"8px 14px", color:"#374151", textAlign:"right", borderLeft:"1px solid #e2e8f0", whiteSpace:"nowrap" }}>אישור בפועל</td>
+              <td style={{ padding:"8px 14px", color:"#374151", textAlign:"right", borderLeft:"1px solid #e2e8f0", whiteSpace:"nowrap" }}>אישור ממונה עירוני</td>
               <td style={{ padding:"5px 10px" }}>
-                <input type="text" inputMode="numeric" value={bs.approvalActual?Number(String(bs.approvalActual).replace(/,/g,"")).toLocaleString("en-US"):""} onChange={e=>upd("approvalActual",e.target.value.replace(/,/g,""))} placeholder="0" style={{ width:"100%", textAlign:"right", background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:6, padding:"4px 8px", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
+                <input type="text" value={bs.approvalActual===undefined||bs.approvalActual===null||bs.approvalActual!=bs.approvalActual?"":String(bs.approvalActual)} onChange={e=>upd("approvalActual",e.target.value.replace(/,/g,""))} onBlur={e=>{const raw=String(e.target.value).replace(/,/g,"").trim();const n=Number(raw);if(raw===""||raw==="-")upd("approvalActual","");else if(!isNaN(n))upd("approvalActual",n);else upd("approvalActual","");}} placeholder="0" style={{ width:"100%", textAlign:"right", background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:6, padding:"4px 8px", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
               </td>
             </tr>
             {/* אומדן קבלני / קיזוז דמי הקמה */}
@@ -2246,6 +2247,20 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
             </tr>
           </tbody>
         </table>
+      </div>
+      {contractorEst > 0 && (() => {
+        const utilPct = consultantsTotal / contractorEst * 100;
+        const bg     = utilPct < 10 ? "#f0fdf4" : utilPct < 12 ? "#fff7ed" : "#fef2f2";
+        const border = utilPct < 10 ? "#86efac" : utilPct < 12 ? "#fdba74" : "#fca5a5";
+        const clr    = utilPct < 10 ? "#15803d" : utilPct < 12 ? "#c2410c" : "#dc2626";
+        return (
+          <div style={{ background:bg, border:"2px solid "+border, borderRadius:12, padding:"16px 20px", minWidth:190, display:"flex", flexDirection:"column", gap:8, direction:"rtl" }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#64748b", whiteSpace:"nowrap" }}>אחוז יועצים מאומדן קבלני</div>
+            <div style={{ fontSize:30, fontWeight:800, color:clr, lineHeight:1 }}>{utilPct.toFixed(2)}%</div>
+            <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>{fmt(consultantsTotal)} / {fmt(contractorEst)}</div>
+          </div>
+        );
+      })()}
       </div>
 
       {/* ── Consultants summary table — full width ── */}
@@ -3334,7 +3349,7 @@ function saveAllData(data) {
 // ── Global page: מידע ראשי ───────────────────────────────────────────────────
 const PROJ_STATUSES_MAIN = ["תכנון","ביצוע","נמסר","הוקפא","בוטל"];
 
-function MainInfoPage({ allData, projects, companies, setAllData, setProjects, onNavigate }) {
+function MainInfoPage({ allData, projects, companies, setAllData, setProjects, onNavigate, statsRows }) {
   const upd = (projId, key, val) => {
     if (key === "name" || key === "status") {
       setProjects(projects.map(p => p.id===projId ? {...p,[key]:val} : p));
@@ -3359,6 +3374,7 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
     { label:"מהות הפרויקט", w:150 },
     { label:"מנהל תכנון",   w:100 },
     { label:"מנהל ביצוע",   w:100 },
+    { label:"% יועצים",     w:80 },
     { label:"סטטוס",         w:90 },
     { label:"תאריך התחלה",  w:110 },
     { label:"תאריך סיום",   w:110 },
@@ -3387,28 +3403,26 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
             </thead>
             <tbody>
               {projects.length === 0 && (
-                <tr><td colSpan={13} style={{ padding:32, textAlign:"right", color:"#94a3b8" }}>אין פרויקטים</td></tr>
+                <tr><td colSpan={14} style={{ padding:32, textAlign:"right", color:"#94a3b8" }}>אין פרויקטים</td></tr>
               )}
               {projects.map((p, i) => {
                 const d = allData[p.id] || {};
                 const o = d.openingData || {};
                 const company = companies.find(c => String(c.id) === String(d.companyId));
+                const cEst = Number(String(o.contractorEst||"").replace(/,/g,"")) || Number(d.budgetState?.contractorEst||0);
+                const consultantsTotal = cEst > 0 ? buildBudgetAllRows({ quotesRows: d.quotes||[], consultantsRows: d.consultants||[], budgetState: { ...d.budgetState, contractorEst: cEst }, statsRows, accountsRows: d.accounts||[], planOnlyMap:{} }).reduce((s,r) => s + (r.payType==="אחוזים" ? r.computedFee : r.value) + r.increases, 0) : 0;
+                const utilPct = cEst > 0 ? consultantsTotal / cEst * 100 : null;
                 return (
                   <tr key={p.id} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafbfd" }}>
                     <td style={{ padding:"6px 8px", borderLeft:"1px solid #f1f5f9" }}>{inp(p.id,"projectNumber",d.projectNumber)}</td>
                     <td style={{ padding:"6px 8px", borderLeft:"1px solid #f1f5f9", fontWeight:600 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-                        <input value={p.name} onChange={e => {
-                          const newName = e.target.value;
-                          setProjects(prev => { const u = prev.map(x => x.id===p.id ? {...x, name:newName} : x); saveProjects(u); return u; });
-                        }}
-                          style={{ fontWeight:600, border:"none", background:"transparent", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", color:"#1e293b", flex:1, cursor:"text", textAlign:"right" }}
-                          onFocus={e=>e.target.style.background="#eff6ff"}
-                          onBlur={e=>e.target.style.background="transparent"}
-                        />
                         <span onClick={() => onNavigate && onNavigate(p)}
-                          style={{ cursor:"pointer", color:"#2563eb", fontSize:14, flexShrink:0 }}
-                          title="פתח פרויקט">↗</span>
+                          style={{ fontWeight:600, fontSize:13, color:"#2563eb", cursor:"pointer", flex:1, textAlign:"right", textDecoration:"underline", textDecorationStyle:"dotted" }}
+                          onMouseOver={e=>e.target.style.color="#1d4ed8"}
+                          onMouseOut={e=>e.target.style.color="#2563eb"}>
+                          {p.name}
+                        </span>
                       </div>
                     </td>
                     <td style={{ padding:"6px 8px", borderLeft:"1px solid #f1f5f9", color:"#374151" }}>{company?.name||"—"}</td>
@@ -3416,6 +3430,10 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
                     <td style={{ padding:"6px 8px", borderLeft:"1px solid #f1f5f9" }}>{inp(p.id,"workDescription",o.workDescription)}</td>
                     <td style={{ padding:"6px 8px", borderLeft:"1px solid #f1f5f9" }}>{inp(p.id,"planningManager",d.planningManager)}</td>
                     <td style={{ padding:"6px 8px", borderLeft:"1px solid #f1f5f9" }}>{inp(p.id,"executionManager",d.executionManager)}</td>
+                    <td style={{ padding:"6px 8px", borderLeft:"1px solid #f1f5f9", textAlign:"right", fontWeight:600,
+                      color: utilPct === null ? "#94a3b8" : utilPct < 10 ? "#15803d" : utilPct < 12 ? "#c2410c" : "#dc2626" }}>
+                      {utilPct === null ? "—" : utilPct.toFixed(2) + "%"}
+                    </td>
                     <td style={{ padding:"4px 6px", borderLeft:"1px solid #f1f5f9" }}>
                       <select value={p.status||""} onChange={e=>upd(p.id,"status",e.target.value)}
                         style={{ width:"100%", border:"none", background:"transparent", fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", color:"#1e293b", textAlign:"right", cursor:"pointer" }}>
@@ -3659,8 +3677,6 @@ function DashboardPage({ allData, projects, onNavigate, milestones }) {
     accounts.forEach(inv => {
       // Skip if no meaningful amount (must be positive number)
       if (!inv.amount || Number(inv.amount) <= 0) return;
-      // Skip if no invoice number (only for regular milestones, not increases)
-      if (!inv.invoiceNum && !inv.rowKey?.startsWith("i-")) return;
       // Off dashboard if approved by municipality or rejected
       if (inv.toMunicipality || inv.rejected) return;
       const base = { projId: proj.id, projName: proj.name,
@@ -3675,10 +3691,13 @@ function DashboardPage({ allData, projects, onNavigate, milestones }) {
         zoneC.push({ ...base, key:`invc-${proj.id}-${inv.id}` });
       else if (!inv.pmApproved)
         zoneB.push({ ...base, key:`inv1-${proj.id}-${inv.id}` });
-      else if (inv.pmApproved && !inv.unitManagerApproved)
-        zoneUM.push({ ...base, key:`inv2-${proj.id}-${inv.id}` });
-      else if (inv.unitManagerApproved && !inv.toMunicipality)
-        zone2.push({ ...base, key:`inv3-${proj.id}-${inv.id}` });
+      else {
+        if (!inv.invoiceNum && !inv.rowKey?.startsWith("i-")) return;
+        if (!inv.unitManagerApproved)
+          zoneUM.push({ ...base, key:`inv2-${proj.id}-${inv.id}` });
+        else if (!inv.toMunicipality)
+          zone2.push({ ...base, key:`inv3-${proj.id}-${inv.id}` });
+      }
     });
   });
 
@@ -4193,7 +4212,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
       ["אומדן קבלני",        toNum(o.contractorEst || bs.contractorEst)],
       ["כתב כמויות / מכרז", toNum(bs.tenderDocs)],
       ["חשבון קבלן סופי",   toNum(bs.finalAccount)],
-      ["אישור בפועל",        toNum(bs.approvalActual)],
+      ["אישור ממונה עירוני",        toNum(bs.approvalActual)],
       ["קיזוז דמי הקמה",    toNum(bs.setupOffset)],
     ];
     (bs.extraItems||[]).forEach(x => budgetRows.push([x.desc||"תקציב שהתקבל", toNum(x.amount)]));
@@ -4614,7 +4633,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
 
         {!selectedProj && globalPage === "maininfo" && (
           <MainInfoPage allData={allData} projects={visibleProjects} companies={companies} setAllData={setAllData} setProjects={p=>{setProjects(p);saveProjects(p);}}
-            onNavigate={proj => { setSelectedProj(proj); setActiveTab("budget"); setGlobalPage(null); }} />
+            onNavigate={proj => { setSelectedProj(proj); setActiveTab("budget"); setGlobalPage(null); }} statsRows={statsRows} />
         )}
         {!selectedProj && globalPage === "costs" && (
           <CostsPage allData={allData} projects={visibleProjects} statsRows={statsRows} />
