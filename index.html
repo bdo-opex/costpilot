@@ -8,7 +8,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <script type="module">
     // Suppress Babel warning
     const _warn = console.warn.bind(console);
@@ -2480,9 +2479,9 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                             <tr style={{ borderBottom:"1px solid #f1f5f9" }}>
                               <td style={{ padding:"7px 10px", fontSize:13, color:"#1e293b" }}>תקורות חברה עירונית</td>
                               <td style={{ padding:"7px 10px" }}>
-                                <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-start" }}>
-                                  <span style={{ fontSize:11, color:"#64748b" }}>%</span>
+                                <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end" }}>
                                   <input type="number" value={bs.overheadPct||""} onChange={e=>upd("overheadPct",e.target.value)} style={{...inputStyle, width:50, textAlign:"right"}} />
+                                  <span style={{ fontSize:11, color:"#64748b" }}>%</span>
                                 </div>
                               </td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:"#1e293b", fontWeight:600 }}>{fmt(overheadAmt)}</td>
@@ -2496,9 +2495,9 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                             <tr style={{ borderBottom:"1px solid #f1f5f9", background:"#fafbfd" }}>
                               <td style={{ padding:"7px 10px", fontSize:13, color:"#1e293b" }}>בצ״מ</td>
                               <td style={{ padding:"7px 10px" }}>
-                                <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-start" }}>
-                                  <span style={{ fontSize:11, color:"#64748b" }}>%</span>
+                                <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end" }}>
                                   <input type="number" value={bs.bcmPct||""} onChange={e=>upd("bcmPct",e.target.value)} style={{...inputStyle, width:50, textAlign:"right"}} placeholder="" />
+                                  <span style={{ fontSize:11, color:"#64748b" }}>%</span>
                                 </div>
                               </td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:"#1e293b", fontWeight:600 }}>{fmt(bcmAmt)}</td>
@@ -2512,9 +2511,9 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                             <tr style={{ borderBottom:"1px solid #f1f5f9" }}>
                               <td style={{ padding:"7px 10px", fontSize:13, color:"#1e293b" }}>מע״מ</td>
                               <td style={{ padding:"7px 10px" }}>
-                                <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-start" }}>
-                                  <span style={{ fontSize:11, color:"#64748b" }}>%</span>
+                                <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end" }}>
                                   <input type="number" value={bs.vatPct||18} onChange={e=>upd("vatPct",e.target.value)} style={{...inputStyle, width:50, textAlign:"right"}} />
+                                  <span style={{ fontSize:11, color:"#64748b" }}>%</span>
                                 </div>
                               </td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:"#1e293b", fontWeight:600 }}>{fmt(vatAmt)}</td>
@@ -4241,8 +4240,13 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(contractorRows), "חשבון קבלן סופי");
 
-    const wbout = XLSX.write(wb, { bookType:"xlsx", type:"array" });
-    saveAs(new Blob([wbout], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}), proj.name + ".xlsx");
+    const wbout = XLSX.write(wb, { bookType:"xlsx", type:"base64" });
+    const a = document.createElement("a");
+    a.href = "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," + wbout;
+    a.download = `${proj.name}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   // ── Backup all data to JSON ──────────────────────────────────────────────
