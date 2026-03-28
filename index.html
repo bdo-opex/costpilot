@@ -7,7 +7,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
   <script type="module">
     // Suppress Babel warning
     const _warn = console.warn.bind(console);
@@ -304,6 +304,45 @@
       );
     }
 
+// ── File System Access API helpers (backup dir) ───────────────────────────
+const _bkpDB = (() => {
+  let _db = null;
+  const open = () => new Promise((res, rej) => {
+    if (_db) return res(_db);
+    const req = indexedDB.open("costpilot_fs", 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore("handles");
+    req.onsuccess = e => { _db = e.target.result; res(_db); };
+    req.onerror = () => rej(req.error);
+  });
+  return {
+    save: async (handle) => {
+      const d = await open();
+      return new Promise((res, rej) => {
+        const tx = d.transaction("handles", "readwrite");
+        tx.objectStore("handles").put(handle, "backupDir");
+        tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+      });
+    },
+    load: async () => {
+      const d = await open();
+      return new Promise(res => {
+        const tx = d.transaction("handles", "readonly");
+        const req = tx.objectStore("handles").get("backupDir");
+        req.onsuccess = () => res(req.result || null);
+        req.onerror = () => res(null);
+      });
+    },
+    clear: async () => {
+      const d = await open();
+      return new Promise(res => {
+        const tx = d.transaction("handles", "readwrite");
+        tx.objectStore("handles").delete("backupDir");
+        tx.oncomplete = res; tx.onerror = res;
+      });
+    },
+  };
+})();
+
 function App() {
       const [user, setUser]         = useState(undefined);
       const [userRole, setUserRole] = useState(null);  // { role: "admin"|"user", projects: [...] }
@@ -398,9 +437,13 @@ const css = `
   input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
   input[type=number] { -moz-appearance:textfield; }
   .hov-row:hover{background:#f0f6ff!important;}
+  .hov-row .del-proj-btn{opacity:0;transition:opacity .15s;}
+  .hov-row:hover .del-proj-btn{opacity:1;}
   .hov-side:hover{background:#eff6ff!important;}
   .hov-tab:hover{background:#f8fafc!important;}
   .fade{animation:fade .2s ease;}
+  .view-only input,.view-only textarea,.view-only select{pointer-events:none!important;cursor:default!important;}
+  .view-only button:not(.allow-readonly){pointer-events:none!important;opacity:.45!important;cursor:default!important;}
   @keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
   @keyframes pulse-border{0%,100%{box-shadow:0 0 0 3px #bfdbfe;}50%{box-shadow:0 0 0 7px #93c5fd66;}} @keyframes pulse-row{0%,100%{background:#dbeafe;}50%{background:#bfdbfe;}}
   .field-highlight{animation:pulse-border .6s ease 3;} .row-highlight{animation:pulse-row .6s ease 3;}
@@ -1354,7 +1397,7 @@ ${dataRows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#f0f9ff"}">${ro
           <span>רשימה זו מתעדכנת אוטומטית — יועצים שאושרו בלשונית <strong>הצעות מחיר יועצים</strong> יופיעו כאן. לחץ על כרטיסייה לפרטים.</span>
         </div>
         {rows.length > 0 && (
-          <button onClick={exportToExcel}
+          <button onClick={exportToExcel} className="allow-readonly"
             style={{ padding:"10px 18px", background:"#16a34a", color:"#fff", border:"none", borderRadius:10,
               fontFamily:"'Heebo',sans-serif", fontSize:13, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap",
               display:"flex", alignItems:"center", gap:8 }}>
@@ -1606,10 +1649,12 @@ function ReasonCell({ value, onCommit }) {
   );
 }
 
-function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultantsRows, budgetState, statsRows, companyId, milestones, openInvoiceId, onNavigate, openingData }) {
+function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultantsRows, budgetState, statsRows, companyId, milestones, openInvoiceId, onNavigate, openingData, localMilestones, setLocalMilestones }) {
 
   const [selConsultant, setSelConsultant] = useState(null);
   const [expanded, setExpanded]           = useState({});
+  const [editingMs, setEditingMs]         = useState(false);
+  const [draftMs, setDraftMs]             = useState([]);
 
   // ── Compute fees ──────────────────────────────────────────────────────────
   const contractorEst = Number(String((openingData||{}).contractorEst||"").replace(/,/g,"").replace(/[^\d.]/g,"")) || Number((budgetState||{}).contractorEst || 0);
@@ -1667,20 +1712,29 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
     }, 600);
   }, [openInvoiceId, consultantFees.length]);
 
-  const fieldMilestones = (sel && companyId)
-    ? (milestones?.[companyId]?.[sel.field] || [])
-    : [];
+  const templateMilestones = (sel && companyId) ? (milestones?.[companyId]?.[sel.field] || []) : [];
+  const hasLocalMs = sel ? !!(localMilestones||{})[sel.field] : false;
+  const fieldMilestones = hasLocalMs ? (localMilestones[sel.field]||[]) : templateMilestones;
+
+  const openMsEditor = () => {
+    setDraftMs(fieldMilestones.map(m => ({ ...m })));
+    setEditingMs(true);
+  };
+  const saveMsLocal = () => {
+    setLocalMilestones({ ...(localMilestones||{}), [(sel||{}).field]: draftMs });
+    setEditingMs(false);
+  };
+  const resetToTemplate = () => {
+    const updated = { ...(localMilestones||{}) };
+    delete updated[(sel||{}).field];
+    setLocalMilestones(updated);
+    setEditingMs(false);
+  };
 
   const getInvoices   = key => rows.filter(r=>r.consultantName===sel?.name && r.rowKey===key);
-  const [noClaimsError, setNoClaimsError] = React.useState(false);
-
   const addInvoice = (key) => {
     if (!sel?.name) return;
-    if (sel?.noClaims) {
-      setNoClaimsError(true);
-      setTimeout(() => setNoClaimsError(false), 4000);
-      return;
-    }
+    if (sel?.noClaims) return;
     setRows(prev => {
       const newRow = {
         id:Date.now(), createdAt: Date.now(), consultantName:sel.name, rowKey:key,
@@ -1852,13 +1906,14 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
                             </div>
                           )}
                           {invs.length === 0 && <div style={{ color:"#94a3b8", fontSize:12, marginBottom:8 }}>לא הוזנו חשבונות עדיין</div>}
-                          {noClaimsError && (
-                            <div style={{ color:"#dc2626", fontSize:12, fontWeight:600, marginBottom:6, textAlign:"right", background:"#fef2f2", border:"1px solid #fecaca", borderRadius:6, padding:"6px 10px" }}>
-                              ⚠️ לא ניתן להוסיף חשבון — סומן "העדר תביעות". יש לבטל את הסימון תחילה.
+                          {sel.noClaims && (
+                            <div style={{ color:"#b45309", fontSize:12, fontWeight:600, marginBottom:6, textAlign:"right", background:"#fffbeb", border:"1px solid #fde68a", borderRadius:6, padding:"6px 10px" }}>
+                              התקבל העדר תביעות — לא ניתן להוסיף חשבונות ליועץ זה
                             </div>
                           )}
                           <button onClick={(e)=>{e.stopPropagation(); addInvoice(key);}}
-                            style={{ background:"#f8fafc", color:"#334155", border:"1px solid #e2e8f0", borderRadius:6, padding:"4px 12px", fontSize:11, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>
+                            disabled={!!sel.noClaims}
+                            style={{ background: sel.noClaims?"#f1f5f9":"#f8fafc", color: sel.noClaims?"#94a3b8":"#334155", border:"1px solid #e2e8f0", borderRadius:6, padding:"4px 12px", fontSize:11, cursor: sel.noClaims?"not-allowed":"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, opacity: sel.noClaims?0.6:1 }}>
                             + הוסף חשבון
                           </button>
                         </div>
@@ -1873,9 +1928,7 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
             <tr style={{ background:"#f8fafc", borderTop:"2px solid #e2e8f0" }}>
               <td colSpan={3} style={{ padding:"9px 14px", fontWeight:800, color:"#1e293b" }}>סה״כ</td>
               <td style={{ padding:"9px 14px", fontWeight:800, color:"#1e293b", textAlign:"right" }}>{fmt(totalBase)}</td>
-              <td style={{ padding:"9px 14px", textAlign:"right", fontWeight:800, color:"#374151" }}>
-                {totalBase ? (totalPaid/totalBase*100).toFixed(1)+"%" : "—"}
-              </td>
+              <td />
               <td style={{ padding:"9px 14px", fontWeight:800, color:"#374151", textAlign:"right" }}>{fmt(totalPaid)}</td>
               <td />
             </tr>
@@ -2003,9 +2056,72 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
 
           {/* ── Milestones ── */}
           <Card style={{ padding:0, overflow:"hidden" }}>
-            <div style={{ padding:"12px 18px", borderBottom:"1px solid #e8edf4", fontWeight:700, color:"#1e293b" }}>אבני דרך</div>
+            <div style={{ padding:"12px 18px", borderBottom:"1px solid #e8edf4", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontWeight:700, color:"#1e293b" }}>אבני דרך</span>
+                {hasLocalMs && <span style={{ fontSize:11, fontWeight:700, background:"#dbeafe", color:"#1d4ed8", borderRadius:6, padding:"2px 8px" }}>עריכה מקומית</span>}
+              </div>
+              {companyId && !editingMs && (
+                <button onClick={openMsEditor}
+                  style={{ fontSize:12, padding:"4px 12px", borderRadius:7, border:"1.5px solid #93c5fd", background:"#eff6ff", color:"#1d4ed8", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>
+                  ✏️ ערוך אבני דרך
+                </button>
+              )}
+            </div>
+
+            {/* Inline milestone editor */}
+            {editingMs && (
+              <div style={{ padding:"14px 18px", background:"#f8fafc", borderBottom:"1px solid #e2e8f0" }}>
+                <div style={{ fontSize:12, fontWeight:700, color:"#475569", marginBottom:10 }}>עריכת אבני דרך — שינויים חלים על פרויקט זה בלבד</div>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, direction:"rtl", marginBottom:10 }}>
+                  <thead>
+                    <tr style={{ background:"#e2e8f0" }}>
+                      {["שם אבן דרך","אחוז (%)","תכנון בלבד",""].map(h=>(
+                        <th key={h} style={{ padding:"6px 10px", textAlign:"right", fontWeight:700, color:"#475569", fontSize:11 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {draftMs.map((m,i) => (
+                      <tr key={m.id} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#f8fafc" }}>
+                        <td style={{ padding:"5px 8px" }}>
+                          <input value={m.name||""} onChange={e=>setDraftMs(draftMs.map((x,j)=>j===i?{...x,name:e.target.value}:x))}
+                            style={{ width:"100%", padding:"4px 8px", border:"1px solid #e2e8f0", borderRadius:5, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none" }} />
+                        </td>
+                        <td style={{ padding:"5px 8px", width:90 }}>
+                          <input type="number" value={m.pct||""} onChange={e=>setDraftMs(draftMs.map((x,j)=>j===i?{...x,pct:Number(e.target.value)}:x))}
+                            style={{ width:"100%", padding:"4px 8px", border:"1px solid #e2e8f0", borderRadius:5, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", textAlign:"right" }} />
+                        </td>
+                        <td style={{ padding:"5px 8px", textAlign:"center", width:80 }}>
+                          <input type="checkbox" checked={!!m.planOnly} onChange={e=>setDraftMs(draftMs.map((x,j)=>j===i?{...x,planOnly:e.target.checked}:x))} />
+                        </td>
+                        <td style={{ padding:"5px 8px", width:40 }}>
+                          <button onClick={()=>setDraftMs(draftMs.filter((_,j)=>j!==i))}
+                            style={{ background:"#fef2f2", color:"#ef4444", border:"none", borderRadius:4, padding:"2px 7px", fontSize:11, cursor:"pointer" }}>🗑</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                  <button onClick={()=>setDraftMs([...draftMs,{id:Date.now(),name:"",pct:0,planOnly:false}])}
+                    style={{ fontSize:12, padding:"5px 14px", borderRadius:7, border:"1.5px solid #e2e8f0", background:"#fff", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, color:"#374151" }}>
+                    + הוסף אבן דרך
+                  </button>
+                  <button onClick={saveMsLocal}
+                    style={{ fontSize:12, padding:"5px 14px", borderRadius:7, border:"none", background:"#1d4ed8", color:"#fff", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:700 }}>
+                    שמור שינויים
+                  </button>
+                  <button onClick={()=>setEditingMs(false)}
+                    style={{ fontSize:12, padding:"5px 14px", borderRadius:7, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#64748b", cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>
+                    ביטול
+                  </button>
+                </div>
+              </div>
+            )}
+
             {!companyId && <div style={{ padding:16, color:"#f59e0b", fontSize:13 }}>⚠️ יש לשייך חברה עירונית לפרויקט</div>}
-            {companyId && fieldMilestones.length === 0 && <div style={{ padding:16, color:"#94a3b8", fontSize:13 }}>אין אבני דרך מוגדרות לתחום "{sel.field}"</div>}
+            {companyId && fieldMilestones.length === 0 && !editingMs && <div style={{ padding:16, color:"#94a3b8", fontSize:13 }}>אין אבני דרך מוגדרות לתחום "{sel.field}"</div>}
             {companyId && fieldMilestones.length > 0 && renderMilestonesSection(fieldMilestones, false)}
           </Card>
 
@@ -2018,35 +2134,43 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
           )}
 
           {/* ── Totals ── */}
-          <Card style={{ background:"#f8fafc", padding:"14px 18px" }}>
-            <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-              {[
-                { label:"סה״כ מאושר (אבני דרך)", val:fmt(paidMilestoneTotal), show:true },
-                { label:"סה״כ מאושר (הגדלות)",   val:fmt(paidIncTotal),       show:(sel.increases||[]).length > 0 },
-              ].filter(x=>x.show).map(x => (
-                <div key={x.label} style={{ display:"grid", gridTemplateColumns:"1fr auto", alignItems:"center", fontSize:13 }}>
-                  <span style={{ color:"#64748b", fontWeight:600, textAlign:"right" }}>{x.label}</span>
-                  <span style={{ fontWeight:700, minWidth:90, textAlign:"left", direction:"ltr" }}>{x.val}</span>
-                </div>
-              ))}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr auto", alignItems:"center", fontSize:15, fontWeight:800, borderTop:"2px solid #e2e8f0", paddingTop:8, marginTop:2 }}>
-                <span style={{ textAlign:"right" }}>סה״כ מאושר</span>
-                <span style={{ minWidth:90, textAlign:"left", direction:"ltr" }}>{fmt(paidTotal)}</span>
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr auto", alignItems:"center", fontSize:14, fontWeight:700 }}>
-                <span style={{ color:"#374151", textAlign:"right" }}>יתרת תשלום ליועץ</span>
-                <span style={{ minWidth:90, textAlign:"left", direction:"ltr",
-                  color: sel.noClaims ? "#94a3b8" : remaining<0?"#dc2626":"#1e293b",
-                  textDecoration: sel.noClaims ? "line-through" : "none" }}>
-                  {fmt(remaining)}
-                </span>
-              </div>
-              {sel.noClaims && (
-                <div style={{ fontSize:12, color:"#374151", fontWeight:600, textAlign:"right", borderTop:"1px solid #e2e8f0", paddingTop:6, marginTop:2 }}>
-                  ✓ העדר תביעות — יתרת תשלום מבוטלת
-                </div>
-              )}
-            </div>
+          <Card style={{ padding:0, overflow:"hidden" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, direction:"rtl", tableLayout:"fixed" }}>
+              <colgroup>
+                <col style={{ width:"4%" }} />
+                <col style={{ width:"24%" }} />
+                <col style={{ width:"12%" }} />
+                <col style={{ width:"16%" }} />
+                <col style={{ width:"12%" }} />
+                <col style={{ width:"20%" }} />
+                <col style={{ width:"12%" }} />
+              </colgroup>
+              <tbody>
+                <tr style={{ background:"#f8fafc", borderTop:"2px solid #e2e8f0" }}>
+                  <td colSpan={3} style={{ padding:"10px 14px", fontWeight:800, fontSize:14, color:"#1e293b" }}>סה״כ</td>
+                  <td style={{ padding:"10px 14px", fontWeight:800, fontSize:14, color:"#1e293b", textAlign:"right" }}>{fmt(sel.totalFee)}</td>
+                  <td />
+                  <td style={{ padding:"10px 14px", fontWeight:800, fontSize:14, color:"#374151", textAlign:"right" }}>{fmt(paidTotal)}</td>
+                  <td />
+                </tr>
+                <tr style={{ background:"#fffbeb", borderTop:"1px solid #fde68a" }}>
+                  <td colSpan={5} style={{ padding:"10px 14px", fontWeight:700, fontSize:13, color:"#92400e" }}>יתרת תשלום ליועץ</td>
+                  <td style={{ padding:"10px 14px", fontWeight:800, fontSize:14, textAlign:"right",
+                    color: sel.noClaims ? "#94a3b8" : remaining < 0 ? "#dc2626" : "#15803d",
+                    textDecoration: sel.noClaims ? "line-through" : "none" }}>
+                    {fmt(remaining)}
+                  </td>
+                  <td />
+                </tr>
+                {sel.noClaims && (
+                  <tr style={{ background:"#fffbeb" }}>
+                    <td colSpan={7} style={{ padding:"6px 14px", fontSize:12, color:"#92400e", fontWeight:600 }}>
+                      ✓ העדר תביעות — יתרת תשלום מבוטלת
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </Card>
         </>
       )}
@@ -2220,7 +2344,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
               </td>
               <td style={{ padding:"8px 14px", color:"#374151", textAlign:"right", borderLeft:"1px solid #e2e8f0", whiteSpace:"nowrap" }}>אישור ממונה עירוני</td>
               <td style={{ padding:"5px 10px" }}>
-                <input type="number" value={isNaN(Number(bs.approvalActual))||bs.approvalActual===""||bs.approvalActual===undefined||bs.approvalActual===null?"":Number(bs.approvalActual)} onChange={e=>upd("approvalActual",e.target.value)} placeholder="0" style={{ width:"100%", textAlign:"right", background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:6, padding:"4px 8px", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box", MozAppearance:"textfield" }} />
+                <NegInput value={bs.approvalActual} onCommit={v=>upd("approvalActual",v)} placeholder="0" style={{ width:"100%", textAlign:"right", background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:6, padding:"4px 8px", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
               </td>
             </tr>
             {/* אומדן קבלני / קיזוז דמי הקמה */}
@@ -2606,62 +2730,153 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
 }
 
 // ── Tab: פתיחת פרויקט ────────────────────────────────────────────────────────
-// ── Tab: תוצאות מכרז ─────────────────────────────────────────────────────────
-function TenderTab({ rows, setRows }) {
-  const del = id => setRows(rows.filter(r => r.id !== id));
-  const upd = (id, key, val) => setRows(rows.map(r => r.id===id ? {...r,[key]:val} : r));
-  const add = () => setRows([...rows, { id:Date.now(), contractor:"", bid:"", rank:"", notes:"", selected:false }]);
+// ── Helper: date picker showing DD/MM/YYYY ────────────────────────────────────
+function DatePickerDMY({ value, onChange, style }) {
+  const ref = React.useRef();
+  const toISO  = v => v ? v.split('/').reverse().join('-') : "";
+  const toDMY  = v => { if (!v) return ""; const [y,m,d] = v.split('-'); return `${d}/${m}/${y}`; };
+  return (
+    <div style={{ position:"relative", width:"100%" }}>
+      <input type="text" readOnly value={value||""} placeholder="DD/MM/YYYY"
+        onClick={()=>{ try{ ref.current.showPicker(); }catch(e){ ref.current.focus(); } }}
+        style={{ ...style, cursor:"pointer", width:"100%", boxSizing:"border-box" }} />
+      <input ref={ref} type="date" value={toISO(value)}
+        onChange={e=>onChange(toDMY(e.target.value))}
+        style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", opacity:0, pointerEvents:"none" }} />
+    </div>
+  );
+}
 
-  const bids   = rows.map(r => Number(r.bid)).filter(Boolean);
-  const lowest = bids.length ? Math.min(...bids) : null;
+// ── Tab: תוצאות מכרז ─────────────────────────────────────────────────────────
+function TenderTab({ rows, setRows, quotesRows, budgetState, statsRows, openingData, milestones, localMilestones, companyId }) {
+  const [showDoc2, setShowDoc2] = useState(false);
+
+  // Use ONLY opening data for initial/contract estimates (no increases)
+  const contractorEst = Number(String((openingData||{}).contractorEst||"").replace(/,/g,""));
+  const devPct  = Number((statsRows||[]).find(r=>r.field==="פיתוח")?.pct||0);
+  const archBase = contractorEst - contractorEst * devPct / 100;
+  const fmt = n => { const v=Number(n); return (!n&&n!==0)||isNaN(v)?"—":v.toLocaleString("he-IL"); };
+  const fmtDiff = n => { const v=Number(n); if(isNaN(v)||v===0) return "—"; return (v>0?"+":"")+v.toLocaleString("he-IL"); };
+
+  // Build rows from approved consultants (percentage-based only, contract fee without increases)
+  const consultants = [];
+  (quotesRows||[]).forEach(field => {
+    (field.consultants||[]).filter(c=>c.approved&&c.name?.trim()&&(c.payType||"אחוזים")==="אחוזים").forEach(c => {
+      const feePct  = Number(c.value||0);
+      const isArch  = (field.fieldName||"").includes("אדריכל");
+      const isPM    = (field.fieldName||"").includes("מנהל פרויקט");
+      let sectionEst = 0;
+      if (isArch && contractorEst)      sectionEst = archBase;
+      else if (isPM && contractorEst)   sectionEst = contractorEst;
+      else if (contractorEst) { const pp=Number((statsRows||[]).find(r=>r.field===field.fieldName)?.pct||0)/100; sectionEst=contractorEst*pp; }
+      // Contract base fee only — no consultant increases
+      const initialFee = sectionEst * feePct / 100;
+      // BIM = 15% of planning-phase portion (milestones with planOnly=true), only for non-arch/non-PM
+      const isArchOrPM = isArch || isPM;
+      let bim = null;
+      let planningPct = 0;
+      if (!isArchOrPM) {
+        const effectiveMilestones = companyId
+          ? ((localMilestones||{})[field.fieldName] || (milestones||{})[companyId]?.[field.fieldName] || [])
+          : [];
+        planningPct = effectiveMilestones.filter(m=>m.planOnly).reduce((s,m)=>s+Number(m.pct||0),0);
+        const planningFee = initialFee * planningPct / 100;
+        bim = planningFee * 0.15;
+      }
+      const key = (field.fieldName||"")+"__"+(c.name.trim());
+      const saved = rows.find(r=>r.key===key)||{};
+      consultants.push({ key, field:field.fieldName||"", name:c.name.trim(), feePct, sectionEst, initialFee, bim, planningPct,
+        doc1:saved.doc1??"", doc2:saved.doc2??"", date:saved.date??"" });
+    });
+  });
+
+  const updRow = (key, patch) => {
+    const exists = rows.find(r=>r.key===key);
+    setRows(exists ? rows.map(r=>r.key===key?{...r,...patch}:r) : [...rows,{id:Date.now(),key,...patch}]);
+  };
+
+  const inpStyle = { width:"100%", padding:"3px 6px", border:"1px solid #e2e8f0", borderRadius:5, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", background:"transparent", textAlign:"right" };
+  const thBase   = { padding:"7px 10px", textAlign:"right", fontSize:11, fontWeight:700, whiteSpace:"nowrap", borderLeft:"1px solid #e2e8f0" };
+  const tdBase   = { padding:"7px 10px", fontSize:12, borderLeft:"1px solid #e2e8f0", borderBottom:"1px solid #f1f5f9" };
+
+  const existingCols = 6;
+  const updatedCols  = showDoc2 ? 8 : 7;
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
       <Card style={{ padding:0, overflow:"hidden" }}>
         <div style={{ padding:"14px 20px", borderBottom:"1px solid #e8edf4", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <span style={{ fontWeight:700 }}>תוצאות מכרז ({rows.length} מציעים)</span>
-          <PrimaryButton small onClick={add}>+ הוסף מציע</PrimaryButton>
+          <span style={{ fontWeight:700, fontSize:15, color:"#1e293b" }}>גיליון תוצאות מכרז</span>
+          <button onClick={()=>setShowDoc2(!showDoc2)}
+            style={{ fontSize:12, padding:"5px 13px", borderRadius:7, border:"1.5px solid #93c5fd", background:showDoc2?"#dbeafe":"#eff6ff", color:"#1d4ed8", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>
+            {showDoc2 ? "— הסר כתב כמויות 2" : "+ הוסף כתב כמויות 2"}
+          </button>
         </div>
-        <DataTable count={rows.length} headers={["קבלן","הצעת מחיר","דירוג","הפרש מהנמוך","הערות","נבחר",""]}>
-          {rows.map((r,i) => {
-            const bid  = Number(r.bid || 0);
-            const diff = lowest !== null ? bid - lowest : 0;
-            return (
-              <Tr key={r.id} i={i}>
-                <td style={{ padding:"8px 10px" }}>
-                  <input value={r.contractor} onChange={e=>upd(r.id,"contractor",e.target.value)} placeholder="שם קבלן..."
-                    style={{ width:"100%", background:"transparent", border:"1px solid #e2e8f0", borderRadius:6, padding:"4px 8px", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none" }}
-                    onFocus={e=>e.target.style.borderColor="#3b82f6"} onBlur={e=>e.target.style.borderColor="#e2e8f0"} />
-                </td>
-                <td style={{ padding:"8px 10px" }}>
-                  <input type="number" value={r.bid} onChange={e=>upd(r.id,"bid",e.target.value)} placeholder="0"
-                    style={{ width:110, background:"transparent", border:"1px solid #e2e8f0", borderRadius:6, padding:"4px 8px", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", textAlign:"right", fontWeight:700, color:bid===lowest&&bid?"#16a34a":"#1e293b" }}
-                    onFocus={e=>e.target.style.borderColor="#3b82f6"} onBlur={e=>e.target.style.borderColor="#e2e8f0"} />
-                </td>
-                <td style={{ padding:"8px 10px" }}>
-                  <input value={r.rank} onChange={e=>upd(r.id,"rank",e.target.value)} placeholder="—"
-                    style={{ width:60, background:"transparent", border:"1px solid #e2e8f0", borderRadius:6, padding:"4px 8px", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none" }}
-                    onFocus={e=>e.target.style.borderColor="#3b82f6"} onBlur={e=>e.target.style.borderColor="#e2e8f0"} />
-                </td>
-                <td style={{ padding:"8px 10px", fontWeight:600, color:diff===0?"#16a34a":"#64748b" }}>
-                  {bid ? (diff===0 ? "הנמוך ביותר" : "+"+fmt(diff)) : "—"}
-                </td>
-                <td style={{ padding:"8px 10px" }}>
-                  <input value={r.notes} onChange={e=>upd(r.id,"notes",e.target.value)} placeholder="הערות..."
-                    style={{ width:"100%", background:"transparent", border:"1px solid #e2e8f0", borderRadius:6, padding:"4px 8px", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none" }}
-                    onFocus={e=>e.target.style.borderColor="#3b82f6"} onBlur={e=>e.target.style.borderColor="#e2e8f0"} />
-                </td>
-                <td style={{ padding:"8px 10px" }}>
-                  <label style={{ display:"flex", alignItems:"center", gap:5, cursor:"pointer", fontSize:12, fontWeight:600, color:r.selected?"#16a34a":"#94a3b8" }}>
-                    <input type="checkbox" checked={!!r.selected} onChange={e=>upd(r.id,"selected",e.target.checked)} style={{ accentColor:"#475569" }} />
-                    {r.selected ? "נבחר" : ""}
-                  </label>
-                </td>
-                <Td><DeleteButton onClick={()=>del(r.id)} /></Td>
-              </Tr>
-            );
-          })}
-        </DataTable>
+        {consultants.length === 0
+          ? <div style={{ padding:32, color:"#94a3b8", fontSize:13, textAlign:"right" }}>אין יועצים מאושרים בפרויקט</div>
+          : <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", direction:"rtl", fontSize:12 }}>
+                <thead>
+                  {/* Group headers */}
+                  <tr>
+                    <th colSpan={existingCols} style={{ ...thBase, background:"#dbeafe", color:"#1e40af", fontSize:12, textAlign:"center", borderBottom:"1px solid #bfdbfe" }}>מצב קיים</th>
+                    <th colSpan={updatedCols}   style={{ ...thBase, background:"#dcfce7", color:"#166534", fontSize:12, textAlign:"center", borderBottom:"1px solid #bbf7d0", borderRight:"2px solid #86efac" }}>אומדן מעודכן לפי מכרז</th>
+                  </tr>
+                  {/* Column headers */}
+                  <tr style={{ background:"#f8fafc" }}>
+                    {["תחום","יועץ","שכר טרחה %","אומדן פרק ראשוני","שכר טרחה ראשוני","שכ\"ט BIM"].map(h=>(
+                      <th key={h} style={{ ...thBase, background:"#eff6ff", color:"#1e40af" }}>{h}</th>
+                    ))}
+                    <th style={{ ...thBase, background:"#f0fdf4", color:"#166534", borderRight:"2px solid #86efac" }}>תאריך</th>
+                    <th style={{ ...thBase, background:"#f0fdf4", color:"#166534" }}>כתב כמויות</th>
+                    {showDoc2 && <th style={{ ...thBase, background:"#f0fdf4", color:"#166534" }}>כתב כמויות 2</th>}
+                    {["שכר טרחה מעודכן","הגדלה נדרשת","שכ\"ט BIM מעודכן","הגדלה נדרשת BIM"].map(h=>(
+                      <th key={h} style={{ ...thBase, background:"#f0fdf4", color:"#166534" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {consultants.map((c,i)=>{
+                    const doc1 = Number(c.doc1||0);
+                    const doc2 = showDoc2 ? Number(c.doc2||0) : 0;
+                    const tenderBase = (showDoc2 && doc2) ? doc2 : doc1;
+                    const updatedFee  = tenderBase ? tenderBase * (c.feePct||0)/100 : null;
+                    const increase    = updatedFee !== null ? updatedFee - c.initialFee : null;
+                    const bimUpdated  = (updatedFee !== null && c.bim !== null) ? updatedFee * c.planningPct / 100 * 0.15 : null;
+                    const bimIncrease = (bimUpdated !== null && c.bim !== null) ? bimUpdated - c.bim : null;
+                    const bg = i%2===0?"#fff":"#fafbfd";
+                    return (
+                      <tr key={c.key} style={{ background:bg }}>
+                        <td style={{ ...tdBase, fontWeight:600, color:"#374151" }}>{c.field}</td>
+                        <td style={{ ...tdBase, fontWeight:600, color:"#1e293b" }}>{c.name}</td>
+                        <td style={{ ...tdBase, textAlign:"right", color:"#475569" }}>{c.feePct!==null ? c.feePct+"%" : "סכום קבוע"}</td>
+                        <td style={{ ...tdBase, textAlign:"right", color:"#475569" }}>{fmt(c.sectionEst)}</td>
+                        <td style={{ ...tdBase, textAlign:"right", fontWeight:700 }}>{fmt(c.initialFee)}</td>
+                        <td style={{ ...tdBase, textAlign:"right", color:"#475569" }}>{c.bim !== null && c.bim > 0 ? fmt(Math.round(c.bim)) : "—"}</td>
+                        <td style={{ ...tdBase, borderRight:"2px solid #86efac" }}>
+                          <DatePickerDMY value={c.date} onChange={v=>updRow(c.key,{date:v})} style={inpStyle} />
+                        </td>
+                        <td style={{ ...tdBase }}>
+                          <NegInput value={c.doc1} onCommit={v=>updRow(c.key,{doc1:v})} style={{ ...inpStyle }} placeholder="0" />
+                        </td>
+                        {showDoc2 && <td style={{ ...tdBase }}>
+                          <NegInput value={c.doc2} onCommit={v=>updRow(c.key,{doc2:v})} style={{ ...inpStyle }} placeholder="0" />
+                        </td>}
+                        <td style={{ ...tdBase, textAlign:"right", fontWeight:700, color:"#1e293b" }}>{updatedFee!==null ? fmt(Math.round(updatedFee)) : "—"}</td>
+                        <td style={{ ...tdBase, fontWeight:700, color: increase===null?"#94a3b8":increase>0?"#16a34a":increase<0?"#dc2626":"#1e293b" }}>
+                          <span style={{ direction:"ltr", display:"block", textAlign:"right" }}>{increase!==null ? fmtDiff(increase) : "—"}</span>
+                        </td>
+                        <td style={{ ...tdBase, textAlign:"right", color:"#475569" }}>{bimUpdated !== null ? fmt(Math.round(bimUpdated)) : "—"}</td>
+                        <td style={{ ...tdBase, fontWeight:700, color: bimIncrease===null?"#94a3b8":bimIncrease>0?"#16a34a":bimIncrease<0?"#dc2626":"#1e293b" }}>
+                          <span style={{ direction:"ltr", display:"block", textAlign:"right" }}>{bimIncrease!==null ? fmtDiff(bimIncrease) : "—"}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+        }
       </Card>
     </div>
   );
@@ -2669,62 +2884,96 @@ function TenderTab({ rows, setRows }) {
 
 // ── Tab: חשבון קבלן סופי ─────────────────────────────────────────────────────
 function ContractorTab({ rows, setRows }) {
-  const empty = { item:"", planned:"", actual:"", invoice:"", date:"", status:"ממתין" };
-  const [f, sf] = useState(empty);
-  const add = () => {
-    if (!f.item.trim()) return;
-    setRows([...rows, { ...f, id: Date.now() }]);
-    sf(empty);
-  };
-  const del = id => setRows(rows.filter(r => r.id !== id));
+  const fmtC = n => { const v=Number(n); return (!n&&n!==0)||isNaN(v)?"—":v.toLocaleString("he-IL"); };
+  const fmtDiffC = n => { const v=Number(n); if(isNaN(v)||v===0) return "—"; return (v>0?"+":"")+v.toLocaleString("he-IL"); };
 
-  const totP = rows.reduce((s,r) => s+Number(r.planned||0), 0);
-  const totA = rows.reduce((s,r) => s+Number(r.actual||0), 0);
+  const upd    = (id, patch) => setRows(rows.map(r => r.id===id ? {...r,...patch} : r));
+  const del    = id => setRows(rows.filter(r => r.id !== id));
+  const addRow = () => setRows([...rows, { id:Date.now(), item:"", planned:"", actual:"", invoice:"", date:"", status:"ממתין" }]);
+
+  const thBase = { padding:"7px 10px", textAlign:"right", fontSize:11, fontWeight:700, whiteSpace:"nowrap", borderLeft:"1px solid #e2e8f0" };
+  const tdBase = { padding:"6px 8px", fontSize:12, borderLeft:"1px solid #f1f5f9", borderBottom:"1px solid #f1f5f9" };
+  const inpStyle = { width:"100%", padding:"3px 6px", border:"1px solid #e2e8f0", borderRadius:5, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", background:"transparent", textAlign:"right" };
+
+  const totPlanned = rows.reduce((s,r)=>s+Number(r.planned||0),0);
+  const totActual  = rows.reduce((s,r)=>s+Number(r.actual||0),0);
+  const totDiff    = totActual - totPlanned;
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
       <SummaryCards items={[
-        { label:"סכום חוזי",  value:fmt(totP),      color:"#334155" },
-        { label:"סכום סופי",  value:fmt(totA),      color:"#374151" },
-        { label:"הפרש",       value:fmt(totA-totP), color:totA>totP?"#ef4444":"#16a34a" },
+        { label:"סכום מכרז", value:fmtC(totPlanned), color:"#334155" },
+        { label:"סכום סופי", value:fmtC(totActual),  color:"#374151" },
+        { label:"הפרש",      value:fmtC(totDiff),    color:totDiff>0?"#16a34a":totDiff<0?"#dc2626":"#64748b" },
       ]} />
-      <Card>
-        <div style={{ fontWeight:700, color:"#1e293b", marginBottom:14, fontSize:15 }}>הוסף סעיף</div>
-        <Grid cols="repeat(auto-fill,minmax(140px,1fr))">
-          <TextInput label="סעיף עבודה"   value={f.item}    onChange={e=>sf({...f,item:e.target.value})} />
-          <TextInput label="תכנון (₪)"    type="number" value={f.planned} onChange={e=>sf({...f,planned:e.target.value})} />
-          <TextInput label="סופי (₪)"     type="number" value={f.actual}  onChange={e=>sf({...f,actual:e.target.value})} />
-          <TextInput label="מס׳ חשבונית"  value={f.invoice} onChange={e=>sf({...f,invoice:e.target.value})} />
-          <TextInput label="תאריך"         type="date"   value={f.date}    onChange={e=>sf({...f,date:e.target.value})} />
-          <SelectInput label="סטטוס" value={f.status} onChange={e=>sf({...f,status:e.target.value})} options={["ממתין","בביצוע","הושלם","שנוי במחלוקת"]} />
-        </Grid>
-        <div style={{ marginTop:14 }}><PrimaryButton onClick={add}>+ הוסף סעיף</PrimaryButton></div>
-      </Card>
       <Card style={{ padding:0, overflow:"hidden" }}>
-        <div style={{ padding:"14px 20px", borderBottom:"1px solid #e8edf4", fontWeight:700 }}>חשבון קבלן סופי ({rows.length})</div>
-        <DataTable count={rows.length} headers={["סעיף","תכנון","סופי","הפרש","חשבונית","תאריך","סטטוס",""]}>
-          {rows.map((r,i) => {
-            const diff = Number(r.actual||0) - Number(r.planned||0);
-            return (
-              <Tr key={r.id} i={i}>
-                <Td bold>{r.item}</Td>
-                <Td blue>{fmt(r.planned)}</Td>
-                <Td green>{fmt(r.actual)}</Td>
-                <td style={{ padding:"11px 14px", fontWeight:600, color:diff>0?"#ef4444":"#16a34a" }}>{diff>0?"+":""}{fmt(diff)}</td>
-                <Td muted>{r.invoice}</Td>
-                <Td muted>{r.date}</Td>
-                <Td>
-                  <Badge color={
-                    r.status==="הושלם"?"#16a34a":
-                    r.status==="שנוי במחלוקת"?"#ef4444":
-                    r.status==="בביצוע"?"#3b82f6":"#d97706"
-                  }>{r.status}</Badge>
-                </Td>
-                <Td><DeleteButton onClick={()=>del(r.id)} /></Td>
-              </Tr>
-            );
-          })}
-        </DataTable>
+        <div style={{ padding:"14px 20px", borderBottom:"1px solid #e8edf4", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <span style={{ fontWeight:700, fontSize:15, color:"#1e293b" }}>חשבון קבלן סופי</span>
+          <button onClick={addRow} style={{ fontSize:12, padding:"5px 13px", borderRadius:7, border:"1.5px solid #86efac", background:"#f0fdf4", color:"#166534", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>+ הוסף שורה</button>
+        </div>
+        {rows.length === 0
+          ? <div style={{ padding:32, color:"#94a3b8", fontSize:13, textAlign:"right" }}>לחץ על "הוסף שורה" כדי להתחיל</div>
+          : <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", direction:"rtl", fontSize:12 }}>
+                <thead>
+                  <tr>
+                    <th colSpan={2} style={{ ...thBase, background:"#dbeafe", color:"#1e40af", fontSize:12, textAlign:"center", borderBottom:"1px solid #bfdbfe" }}>תוצאות מכרז</th>
+                    <th colSpan={6} style={{ ...thBase, background:"#dcfce7", color:"#166534", fontSize:12, textAlign:"center", borderBottom:"1px solid #bbf7d0", borderRight:"2px solid #86efac" }}>חשבון סופי</th>
+                  </tr>
+                  <tr style={{ background:"#f8fafc" }}>
+                    <th style={{ ...thBase, background:"#eff6ff", color:"#1e40af" }}>סעיף עבודה</th>
+                    <th style={{ ...thBase, background:"#eff6ff", color:"#1e40af" }}>סכום מכרז</th>
+                    <th style={{ ...thBase, background:"#f0fdf4", color:"#166534", borderRight:"2px solid #86efac" }}>תאריך</th>
+                    {["סכום סופי","הפרש","מס' חשבונית","סטטוס",""].map(h=>(
+                      <th key={h} style={{ ...thBase, background:"#f0fdf4", color:"#166534" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r,i)=>{
+                    const diff = Number(r.actual||0) - Number(r.planned||0);
+                    const bg = i%2===0?"#fff":"#fafbfd";
+                    return (
+                      <tr key={r.id} style={{ background:bg }}>
+                        <td style={{ ...tdBase }}>
+                          <input value={r.item||""} onChange={e=>upd(r.id,{item:e.target.value})}
+                            style={inpStyle} placeholder="סעיף עבודה" />
+                        </td>
+                        <td style={{ ...tdBase }}>
+                          <NegInput value={r.planned} onCommit={v=>upd(r.id,{planned:v})} style={inpStyle} placeholder="0" />
+                        </td>
+                        <td style={{ ...tdBase, borderRight:"2px solid #86efac" }}>
+                          <DatePickerDMY value={r.date} onChange={v=>upd(r.id,{date:v})} style={inpStyle} />
+                        </td>
+                        <td style={{ ...tdBase }}>
+                          <NegInput value={r.actual} onCommit={v=>upd(r.id,{actual:v})} style={inpStyle} placeholder="0" />
+                        </td>
+                        <td style={{ ...tdBase, fontWeight:700 }}>
+                          <span style={{ direction:"ltr", display:"block", textAlign:"right",
+                            color: diff===0?"#1e293b":diff>0?"#16a34a":"#dc2626" }}>
+                            {fmtDiffC(diff)}
+                          </span>
+                        </td>
+                        <td style={{ ...tdBase }}>
+                          <input value={r.invoice||""} onChange={e=>upd(r.id,{invoice:e.target.value})}
+                            style={inpStyle} placeholder="מס' חשבונית" />
+                        </td>
+                        <td style={{ ...tdBase }}>
+                          <select value={r.status||"ממתין"} onChange={e=>upd(r.id,{status:e.target.value})}
+                            style={{ ...inpStyle, cursor:"pointer" }}>
+                            {["ממתין","בביצוע","הושלם","שנוי במחלוקת"].map(s=><option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </td>
+                        <td style={{ ...tdBase }}>
+                          <DeleteButton onClick={()=>del(r.id)} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+        }
       </Card>
     </div>
   );
@@ -3725,10 +3974,14 @@ function DashboardPage({ allData, projects, onNavigate, milestones }) {
         createdAt: inv.createdAt || inv.id };
       if (inv.toConsultant)
         zoneC.push({ ...base, key:`invc-${proj.id}-${inv.id}` });
-      else if (!inv.pmApproved)
-        zoneB.push({ ...base, key:`inv1-${proj.id}-${inv.id}` });
+      else if (!inv.pmApproved) {
+        const d = allData[proj.id] || {};
+        const managerName = proj.status === "תכנון" ? (d.planningManager || "")
+                          : proj.status === "ביצוע" ? (d.executionManager || "")
+                          : "";
+        zoneB.push({ ...base, key:`inv1-${proj.id}-${inv.id}`, managerName });
+      }
       else {
-        if (!inv.invoiceNum && !inv.rowKey?.startsWith("i-")) return;
         if (!inv.unitManagerApproved)
           zoneUM.push({ ...base, key:`inv2-${proj.id}-${inv.id}` });
         else if (!inv.toMunicipality)
@@ -3806,13 +4059,15 @@ function DashboardPage({ allData, projects, onNavigate, milestones }) {
   const COLS = [["סוג",80],["פרויקט",200],["תחום",130],["יועץ",140],["פרט",130],["סכום",110],["תאריך",100]];
 
   const zones = [
-    { title:"ממתין להמלצה על יועצים / אישור מנהל הגדלות", items:zoneA, color:"#374151", bg:"#fffbeb", border:"#fde68a", icon:"⏳", emptyText:"אין פריטים ממתינים" },
-    { title:"ממתין לאישור מנהל פרויקט",                    items:zoneB, color:"#0891b2", bg:"#ecfeff", border:"#a5f3fc", icon:"👤", emptyText:"אין חשבונות הממתינים לאישור מנהל פרויקט" },
+    { title:"ממתין להמלצה על יועצים / אישור מנהל הגדלות", items:zoneA,  color:"#374151", bg:"#fffbeb", border:"#fde68a", icon:"⏳", emptyText:"אין פריטים ממתינים" },
+    { title:"ממתין לאישור מנהל פרויקט",                    items:zoneB,  color:"#0891b2", bg:"#ecfeff", border:"#a5f3fc", icon:"👤", emptyText:"אין חשבונות הממתינים לאישור מנהל פרויקט", groupByManager:true },
     { title:"ממתין לאישור מנהל יחידה",                     items:zoneUM, color:"#7c3aed", bg:"#f5f3ff", border:"#c4b5fd", icon:"👔", emptyText:"אין חשבונות הממתינים לאישור מנהל יחידה" },
-    { title:"הוחזר ליועץ לתיקון",                           items:zoneC, color:"#dc2626", bg:"#fef2f2", border:"#fecaca", icon:"↩️", emptyText:"אין חשבונות שהוחזרו ליועץ" },
+    { title:"הוחזר ליועץ לתיקון",                           items:zoneC,  color:"#dc2626", bg:"#fef2f2", border:"#fecaca", icon:"↩️", emptyText:"אין חשבונות שהוחזרו ליועץ" },
     { title:"ממתין להעברה לחברה העירונית",                  items:zoneSend, color:"#0369a1", bg:"#f0f9ff", border:"#7dd3fc", icon:"📋", emptyText:"אין יועצים הממתינים להעברה" },
     { title:"ממתין לאישור מזמין",                           items:[...zone2, ...zone3], color:"#334155", bg:"#eff6ff", border:"#bfdbfe", icon:"📤", emptyText:"אין פריטים הממתינים לאישור מזמין" },
   ];
+
+  const visibleZones = zones.filter(z => z.items.length > 0);
 
   return (
     <div className="fade" style={{ padding:"34px 38px", display:"flex", flexDirection:"column", gap:0 }}>
@@ -3822,65 +4077,95 @@ function DashboardPage({ allData, projects, onNavigate, milestones }) {
         <div style={{ fontSize:13, color:"#64748b", marginTop:2 }}>מעקב סטטוס יועצים, הגדלות וחשבונות בכל הפרויקטים</div>
       </div>
 
-      <Card style={{ padding:0, overflow:"hidden" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse", direction:"rtl", tableLayout:"fixed" }}>
-          <colgroup>
-            {COLS.map(([,w]) => <col key={w} style={{ width:w }} />)}
-          </colgroup>
-          <tbody>
-            {zones.map(zone => (
-              <React.Fragment key={zone.title}>
-                {/* Zone header row */}
-                <tr style={{ background: zone.bg, borderTop:"3px solid "+zone.border }}>
-                  <td colSpan={COLS.length} style={{ padding:"14px 20px" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                      <span style={{ fontSize:20 }}>{zone.icon}</span>
-                      <div>
-                        <div style={{ fontWeight:800, fontSize:15, color:zone.color }}>{zone.title}</div>
-                        <div style={{ fontSize:12, color:"#64748b", marginTop:1 }}>{zone.items.length} פריטים ממתינים</div>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-                {/* Column headers */}
-                <tr style={{ background:"#f8fafc", borderBottom:"1px solid #e2e8f0" }}>
-                  {COLS.map(([h]) => (
-                    <th key={h} style={{ padding:"8px 18px", textAlign:"right", fontSize:11, fontWeight:700, color:"#94a3b8" }}>{h}</th>
-                  ))}
-                </tr>
-                {/* Items or empty */}
-                {zone.items.length === 0 ? (
-                  <tr>
-                    <td colSpan={COLS.length} style={{ padding:"18px 20px", color:"#94a3b8", fontSize:13, textAlign:"right", borderBottom:"2px solid #f1f5f9" }}>✓ {zone.emptyText}</td>
+      {visibleZones.length === 0 ? (
+        <Card style={{ padding:"52px 20px", textAlign:"center" }}>
+          <div style={{ fontSize:34, marginBottom:12 }}>✓</div>
+          <div style={{ fontSize:17, fontWeight:700, color:"#1e293b" }}>הכל מסודר</div>
+          <div style={{ fontSize:13, color:"#64748b", marginTop:6 }}>אין פריטים הממתינים לטיפול</div>
+        </Card>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
+          {visibleZones.map(zone => (
+            <Card key={zone.title} style={{ padding:0, overflow:"hidden" }}>
+              <div style={{ padding:"14px 20px", background:zone.bg, borderBottom:"2px solid "+zone.border, display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ fontSize:20 }}>{zone.icon}</span>
+                <div style={{ fontWeight:800, fontSize:15, color:zone.color }}>{zone.title}</div>
+              </div>
+              <table style={{ width:"100%", borderCollapse:"collapse", direction:"rtl", tableLayout:"fixed" }}>
+                <colgroup>
+                  {COLS.map(([,w]) => <col key={w} style={{ width:w }} />)}
+                </colgroup>
+                <thead>
+                  <tr style={{ background:"#f8fafc", borderBottom:"1px solid #e2e8f0" }}>
+                    {COLS.map(([h]) => (
+                      <th key={h} style={{ padding:"8px 18px", textAlign:"right", fontSize:11, fontWeight:700, color:"#94a3b8" }}>{h}</th>
+                    ))}
                   </tr>
-                ) : zone.items.map((item, i) => {
-                  const isHighlighted = highlightKey === item.key;
-                  const isLast = i === zone.items.length - 1;
-                  return (
-                    <tr key={item.key} onClick={() => handleClick(item)}
-                      style={{ cursor:"pointer",
-                        borderBottom: isLast ? "2px solid #f1f5f9" : "1px solid #f1f5f9",
-                        background: isHighlighted ? "#dbeafe" : i%2===0?"#fff":"#fafbfd",
-                        transition:"background .15s" }}
-                      onMouseOver={e => { if(!isHighlighted) e.currentTarget.style.background="#f0f9ff"; }}
-                      onMouseOut={e  => { if(!isHighlighted) e.currentTarget.style.background=i%2===0?"#fff":"#fafbfd"; }}>
-                      <td style={{ padding:"11px 18px" }}><TypeBadge type={item.type} /></td>
-                      <td style={{ padding:"11px 18px", fontSize:13, fontWeight:600, color:"#1e293b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.projName}</td>
-                      <td style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.fieldName}</td>
-                      <td style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.label !== "—" ? item.label : "—"}</td>
-                      <td style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.detail || item.tooltip || "—"}</td>
-                      <td style={{ padding:"11px 18px", fontSize:13, fontWeight:700, color:zone.color, whiteSpace:"nowrap" }}>{fmtVal(item)}</td>
-                      <td style={{ padding:"11px 18px", fontSize:12, color:"#94a3b8", whiteSpace:"nowrap" }}>
-                        {new Date(item.createdAt || Date.now()).toLocaleDateString("en-GB")}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-      </Card>
+                </thead>
+                <tbody>
+                  {(() => {
+                    if (!zone.groupByManager) {
+                      return zone.items.map((item, i) => {
+                        const isHighlighted = highlightKey === item.key;
+                        return (
+                          <tr key={item.key} onClick={() => handleClick(item)}
+                            style={{ cursor:"pointer", borderBottom: i < zone.items.length-1 ? "1px solid #f1f5f9" : "none",
+                              background: isHighlighted ? "#dbeafe" : i%2===0?"#fff":"#fafbfd", transition:"background .15s" }}
+                            onMouseOver={e => { if(!isHighlighted) e.currentTarget.style.background="#f0f9ff"; }}
+                            onMouseOut={e  => { if(!isHighlighted) e.currentTarget.style.background=i%2===0?"#fff":"#fafbfd"; }}>
+                            <td style={{ padding:"11px 18px" }}><TypeBadge type={item.type} /></td>
+                            <td style={{ padding:"11px 18px", fontSize:13, fontWeight:600, color:"#1e293b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.projName}</td>
+                            <td style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.fieldName}</td>
+                            <td style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.label !== "—" ? item.label : "—"}</td>
+                            <td style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.detail || item.tooltip || "—"}</td>
+                            <td style={{ padding:"11px 18px", fontSize:13, fontWeight:700, color:zone.color, whiteSpace:"nowrap" }}>{fmtVal(item)}</td>
+                            <td style={{ padding:"11px 18px", fontSize:12, color:"#94a3b8", whiteSpace:"nowrap" }}>{new Date(item.createdAt || Date.now()).toLocaleDateString("en-GB")}</td>
+                          </tr>
+                        );
+                      });
+                    }
+                    // Group by managerName
+                    const groups = [];
+                    const seen = {};
+                    zone.items.forEach(item => {
+                      const key = item.managerName || "ללא מנהל משויך";
+                      if (!seen[key]) { seen[key] = true; groups.push({ mgr: key, items: [] }); }
+                      groups.find(g => g.mgr === key).items.push(item);
+                    });
+                    return groups.map(group => (
+                      <React.Fragment key={group.mgr}>
+                        <tr>
+                          <td colSpan={COLS.length} style={{ padding:"7px 18px", background:"#e0f2fe", borderTop:"1px solid #bae6fd", borderBottom:"1px solid #bae6fd", fontSize:12, fontWeight:800, color:"#0369a1" }}>
+                            👤 {group.mgr}
+                          </td>
+                        </tr>
+                        {group.items.map((item, i) => {
+                          const isHighlighted = highlightKey === item.key;
+                          return (
+                            <tr key={item.key} onClick={() => handleClick(item)}
+                              style={{ cursor:"pointer", borderBottom: i < group.items.length-1 ? "1px solid #f1f5f9" : "none",
+                                background: isHighlighted ? "#dbeafe" : i%2===0?"#fff":"#fafbfd", transition:"background .15s" }}
+                              onMouseOver={e => { if(!isHighlighted) e.currentTarget.style.background="#f0f9ff"; }}
+                              onMouseOut={e  => { if(!isHighlighted) e.currentTarget.style.background=i%2===0?"#fff":"#fafbfd"; }}>
+                              <td style={{ padding:"11px 18px" }}><TypeBadge type={item.type} /></td>
+                              <td style={{ padding:"11px 18px", fontSize:13, fontWeight:600, color:"#1e293b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.projName}</td>
+                              <td style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.fieldName}</td>
+                              <td style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.label !== "—" ? item.label : "—"}</td>
+                              <td style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.detail || item.tooltip || "—"}</td>
+                              <td style={{ padding:"11px 18px", fontSize:13, fontWeight:700, color:zone.color, whiteSpace:"nowrap" }}>{fmtVal(item)}</td>
+                              <td style={{ padding:"11px 18px", fontSize:12, color:"#94a3b8", whiteSpace:"nowrap" }}>{new Date(item.createdAt || Date.now()).toLocaleDateString("en-GB")}</td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    ));
+                  })()}
+                </tbody>
+              </table>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -3999,7 +4284,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
   useEffect(() => {
     if (window.XLSX) return;
     const script = document.createElement("script");
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    script.src = "https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js";
     document.head.appendChild(script);
   }, []);
 
@@ -4010,6 +4295,24 @@ function AppInner({ currentUser, userRole, setUserRole }) {
   const visibleProjects = isAdmin
     ? projects
     : projects.filter(p => ((userRole?.projects) || []).includes(String(p.id)));
+
+  // מעקב גישה אחרונה לפרויקט (לצורך מיון)
+  const [lastAccessed, setLastAccessed] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("cp_last_accessed")||"{}"); } catch(e) { return {}; }
+  });
+  const touchProject = (p) => {
+    setLastAccessed(prev => {
+      const updated = { ...prev, [p.id]: Date.now() };
+      try { localStorage.setItem("cp_last_accessed", JSON.stringify(updated)); } catch(e) {}
+      return updated;
+    });
+  };
+  const ACTIVE_STATUSES = ["תכנון","ביצוע"];
+  const sortedVisibleProjects = [...visibleProjects].sort((a,b) => {
+    const ta = lastAccessed[a.id] || a.createdAt || a.id;
+    const tb = lastAccessed[b.id] || b.createdAt || b.id;
+    return tb - ta;
+  });
 
   // Load from Firestore on mount
   useEffect(() => {
@@ -4046,7 +4349,9 @@ function AppInner({ currentUser, userRole, setUserRole }) {
   const [scrollToIncreaseId, setScrollToIncreaseId] = useState(null);
   const [openInvoiceId, setOpenInvoiceId] = useState(null);
   const [showModal,    setShowModal]    = useState(false);
-  const [projSearch,   setProjSearch]   = useState("");
+  const [projSearch,        setProjSearch]        = useState("");
+  const [projStatusFilter,  setProjStatusFilter]  = useState("");
+  const [deleteConfirmProj, setDeleteConfirmProj] = useState(null);
   const [newPForm,     setNewPForm]     = useState({ name:"", companyId:"", year:new Date().getFullYear() });
   const [toast,        setToast]        = useState(null);
   const [showStats,    setShowStats]    = useState(false);
@@ -4082,8 +4387,25 @@ function AppInner({ currentUser, userRole, setUserRole }) {
 
   const notify = msg => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
-  const [showBackupModal, setShowBackupModal] = useState(false);
+  const [showBackupModal,   setShowBackupModal]   = useState(false);
+  const [showBackupConfirm, setShowBackupConfirm] = useState(false);
   const [backupText, setBackupText] = useState("");
+  const [backupDirName, setBackupDirName] = useState("");
+  const backupDirRef = React.useRef(null);
+
+  // Load saved backup dir handle
+  useEffect(() => {
+    _bkpDB.load().then(async handle => {
+      if (!handle) return;
+      try {
+        const perm = await handle.queryPermission({ mode: "readwrite" });
+        if (perm === "granted" || perm === "prompt") {
+          backupDirRef.current = handle;
+          setBackupDirName(handle.name);
+        } else { _bkpDB.clear(); }
+      } catch(e) { _bkpDB.clear(); }
+    }).catch(() => {});
+  }, []);
 
   // Auto-save to Firestore - must be before any early return
   useEffect(() => { if (dataLoaded) saveToFirestore(uid, "projects", projects); }, [projects, dataLoaded]);
@@ -4121,7 +4443,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
   };
 
   // ── Export project to Excel ──────────────────────────────────────────────
-  const exportProjectToExcel = (proj) => {
+  const exportProjectToExcel = (proj, { returnBlob=false }={}) => {
     const XLSX = window.XLSX;
     if (!XLSX) { alert("ספריית Excel לא נטענה, נסה שוב"); return; }
     const d = allData[proj.id] || {};
@@ -4129,81 +4451,46 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     const bs = d.budgetState || {};
     const company = companies.find(c => String(c.id) === String(d.companyId));
     const wb = XLSX.utils.book_new();
+    wb.Workbook = { Views: [{ RTL: true }] };
 
-    // 1. פתיחת פרויקט
-    const openingRows = [
-      ["שדה","ערך"],
-      ["שם פרויקט", proj.name],
-      ["מספר פרויקט", d.projectNumber||""],
-      ["כתובת", o.address||""],
-      ["מהות העבודה", o.workDescription||""],
-      ["תאריך התחלה", o.startDate||""],
-      ["תאריך סיום", o.endDate||""],
-      ["שטח מבנה (מ״ר)", o.buildingArea||""],
-      ["אומדן עירוני", o.municipalEst||""],
-      ["אומדן קבלני", o.contractorEst||""],
-      ["ערך מבנה לאדריכל", o.archBase||""],
-      ["כמות מעליות", o.elevators||""],
-      ["כמות עצים", o.trees||""],
-      ["חברה עירונית", company?.name||""],
-      ["מנהל תכנון", d.planningManager||""],
-      ["מנהל ביצוע", d.executionManager||""],
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(openingRows), "פתיחת פרויקט");
+    // Style palette
+    const ST = {
+      H:  { font:{bold:true,sz:11,color:{rgb:"FFFFFF"}},   fill:{fgColor:{rgb:"1E40AF"},patternType:"solid"}, alignment:{horizontal:"right",vertical:"center"} },
+      S:  { font:{bold:true,sz:11,color:{rgb:"1E293B"}},   fill:{fgColor:{rgb:"BFDBFE"},patternType:"solid"}, alignment:{horizontal:"right"} },
+      T:  { font:{bold:true,sz:11,color:{rgb:"78350F"}},   fill:{fgColor:{rgb:"FEF9C3"},patternType:"solid"}, alignment:{horizontal:"right"} },
+      G:  { font:{bold:true,sz:12,color:{rgb:"7C2D12"}},   fill:{fgColor:{rgb:"FDE68A"},patternType:"solid"}, alignment:{horizontal:"right"} },
+      I:  { font:{sz:10,color:{rgb:"334155"}},             fill:{fgColor:{rgb:"EFF6FF"},patternType:"solid"}, alignment:{horizontal:"right"} },
+      D0: { font:{sz:10}, fill:{fgColor:{rgb:"FFFFFF"},patternType:"solid"}, alignment:{horizontal:"right"} },
+      D1: { font:{sz:10}, fill:{fgColor:{rgb:"F0F9FF"},patternType:"solid"}, alignment:{horizontal:"right"} },
+      E:  { fill:{fgColor:{rgb:"FFFFFF"},patternType:"solid"} },
+    };
+    const styleRow = (ws, r, style, maxC) => {
+      for (let c=0; c<=maxC; c++) {
+        const a = XLSX.utils.encode_cell({r,c});
+        if (!ws[a]) ws[a] = {v:"",t:"s"};
+        ws[a].s = style;
+      }
+    };
+    const finalize = (ws, colW) => {
+      ws['!views'] = [{rightToLeft:true}];
+      if (colW) ws['!cols'] = colW.map(w=>({wch:w}));
+    };
+    const makeSimple = (rows, colW) => {
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      finalize(ws, colW);
+      const rng = XLSX.utils.decode_range(ws['!ref']||"A1:A1");
+      styleRow(ws, 0, ST.H, rng.e.c);
+      for (let r=1; r<=rng.e.r; r++) styleRow(ws, r, r%2===1?ST.D0:ST.D1, rng.e.c);
+      return ws;
+    };
 
-    // 2. הצעות מחיר יועצים
-    const quotesRows = [["תחום","שם יועץ","סוג תשלום","ערך","המלצה","הועבר לחברה העירונית","היועץ אושר","הערות"]];
-    (d.quotes||[]).forEach(field => {
-      (field.consultants||[]).forEach(c => {
-        quotesRows.push([field.fieldName||"", c.name||"", c.payType||"", c.value||"",
-          c.recommended?"כן":"לא", c.sentToMunicipality?"כן":"לא", c.approved?"כן":"לא", c.notes||""]);
-      });
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(quotesRows), "הצעות מחיר יועצים");
-
-    // 3. רשימת יועצים
-    const consRows = [["תחום","שם יועץ","טלפון","אימייל","איש קשר"]];
-    (d.consultants||[]).forEach(c => {
-      consRows.push([c.role||"", c.name||"", c.phone||"", c.email||"", c.contact||""]);
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(consRows), "רשימת יועצים");
-
-    // 4. ריכוז חשבונות - build milestone name map
-    const milestoneNameMap = {};
+    // Pre-calculate exportAllRows (used in both sheet 3 and sheet 5)
     const cId = d.companyId || "";
-    if (cId && milestones?.[cId]) {
-      Object.values(milestones[cId]).forEach(mList => {
-        (mList||[]).forEach(m => { milestoneNameMap["m-"+m.id] = { name: m.name||"", pct: m.pct||0, planOnly: !!m.planOnly }; });
-      });
-    }
-    (d.consultants||[]).forEach(con => {
-      (con.increases||[]).forEach(x => { milestoneNameMap["i-"+x.id] = { name: x.reason||"הגדלה", pct: 100 }; });
-    });
-
-    const accRows = [["יועץ","שם אבן הדרך","אחוז אבן הדרך","מס׳ חשבון","תאריך קבלה","סכום",
-      "אישור מנהל פרויקט","אישור מנהל יחידה","אישור מזמין","הוחזר ליועץ","נדחה","תכנון בלבד","הערות"]];
-    (d.accounts||[]).forEach(r => {
-      const ms = milestoneNameMap[r.rowKey] || { name:"", pct:"" };
-      const isPlanOnly = ms.planOnly ? "כן" : "לא";
-      accRows.push([
-        r.consultantName||"", ms.name, ms.pct,
-        r.invoiceNum||"", r.receiptDate||"", r.amount||"",
-        r.pmApproved?"כן":"לא", r.unitManagerApproved?"כן":"לא",
-        r.toMunicipality?"כן":"לא", r.toConsultant?"כן":"לא",
-        r.rejected?"כן":"לא", isPlanOnly, r.reason||""
-      ]);
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(accRows), "ריכוז חשבונות");
-
-    // 5. תקציב הפרויקט
-    // budgetState בדיוק כמו שה-App מעביר ל-BudgetTab
     const exportBState = {
       ...bs,
       contractorEst: String(o.contractorEst||"").replace(/,/g,"") || bs.contractorEst || "",
       municipalEst:  String(o.municipalEst||"").replace(/,/g,"")  || bs.municipalEst  || "",
     };
-
-    // planOnlyMap בדיוק כמו שה-App מחשב לפני BudgetTab
     const exportPlanOnlyMap = {};
     (() => {
       const _cEst  = Number(exportBState.contractorEst||0);
@@ -4230,155 +4517,222 @@ function AppInner({ currentUser, userRole, setUserRole }) {
         });
       });
     })();
-
-    // קורא לאותה פונקציה שמשמשת את BudgetTab - מובטח זהה למסך
     const exportAllRows = buildBudgetAllRows({
-      quotesRows:      d.quotes      || [],
-      consultantsRows: d.consultants || [],
-      budgetState:     exportBState,
-      statsRows,
-      accountsRows:    d.accounts    || [],
-      planOnlyMap:     exportPlanOnlyMap,
+      quotesRows: d.quotes||[], consultantsRows: d.consultants||[],
+      budgetState: exportBState, statsRows,
+      accountsRows: d.accounts||[], planOnlyMap: exportPlanOnlyMap,
     });
-
     const toNum = (v) => { const n = Number(String(v||"").replace(/,/g,"").replace(/[^\d.\-]/g,"")); return isNaN(n) ? "" : n; };
-    const budgetRows = [
-      ["סעיף","ערך"],
-      ["אומדן עירוני",       toNum(o.municipalEst  || bs.municipalEst)],
-      ["אומדן קבלני",        toNum(o.contractorEst || bs.contractorEst)],
-      ["כתב כמויות / מכרז", toNum(bs.tenderDocs)],
-      ["חשבון קבלן סופי",   toNum(bs.finalAccount)],
-      ["אישור ממונה עירוני",        toNum(bs.approvalActual)],
-      ["קיזוז דמי הקמה",    toNum(bs.setupOffset)],
+
+    // 1. פתיחת פרויקט
+    const openingRows = [
+      ["שדה","ערך"],
+      ["שם פרויקט", proj.name],
+      ["מספר פרויקט", d.projectNumber||""],
+      ["כתובת", o.address||""],
+      ["מהות העבודה", o.workDescription||""],
+      ["תאריך התחלה", o.startDate||""],
+      ["תאריך סיום", o.endDate||""],
+      ["שטח מבנה (מ.ר)", o.buildingArea||""],
+      ["אומדן עירוני", o.municipalEst||""],
+      ["אומדן קבלני", o.contractorEst||""],
+      ["כמות מעליות", o.elevators||""],
+      ["כמות עצים", o.trees||""],
+      ["חברה עירונית", company?.name||""],
+      ["מנהל תכנון", d.planningManager||""],
+      ["מנהל ביצוע", d.executionManager||""],
     ];
-    (bs.extraItems||[]).forEach(x => budgetRows.push([x.desc||"תקציב שהתקבל", toNum(x.amount)]));
-    budgetRows.push([]);
-    budgetRows.push(["פירוט תקציב הפרויקט",""]);
-    budgetRows.push(["שם המקצוע","שם היועץ","סכום התקשרות","סכום מצטבר ששולם","יתרה לתשלום","סכום התקשרות לשלב התכנון","העדר תביעות","הערות"]);
+    XLSX.utils.book_append_sheet(wb, makeSimple(openingRows, [24,40]), "פתיחת פרויקט");
 
-    // כותבים ישירות את השדות שכבר נמצאים ב-exportAllRows - בלי שום חישוב נוסף
-    // budgetRows.length כאן = מספר השורות כולל כותרת הפירוט = index הראשון של נתוני יועצים (0-based)
-    const detailDataStartRow = budgetRows.length; // זה ה-row index (0-based) של שורת יועצים ראשונה
+    // 2. הצעות מחיר יועצים
+    const quotesRows = [["תחום","שם יועץ","סוג תשלום","ערך","המלצה","הועבר לחברה","אושר","הערות"]];
+    (d.quotes||[]).forEach(field => {
+      (field.consultants||[]).forEach(c => {
+        quotesRows.push([field.fieldName||"", c.name||"", c.payType||"", c.value||"",
+          c.recommended?"כן":"לא", c.sentToMunicipality?"כן":"לא", c.approved?"כן":"לא", c.notes||""]);
+      });
+    });
+    XLSX.utils.book_append_sheet(wb, makeSimple(quotesRows, [16,22,14,10,10,14,10,28]), "הצעות מחיר יועצים");
 
+    // 3. רשימת יועצים - פירוט פיננסי לפי יועץ
+    const consRows = [["תחום","שם יועץ","סוג תשלום","ערך/אחוז","סכום התקשרות","הגדלות מאושרות","סה כ חוזה","ששולם","יתרה לתשלום","שלב תכנון","העדר תביעות","הערות"]];
     exportAllRows.forEach(r => {
-      const baseFee   = r.payType === "אחוזים" ? r.computedFee : r.value;
-      const totalFee  = baseFee + r.increases;
-      const remaining = totalFee - r.paid;
-      const hasBase   = !!Number(exportBState.contractorEst||0) || r.payType !== "אחוזים";
-      budgetRows.push([
-        r.field,
-        r.name,
-        !hasBase ? (r.value + "%") : totalFee,
-        r.paid,
-        !hasBase ? "" : remaining,
-        r.planOnly > 0 ? r.planOnly : "",
+      const isPct = r.payType === "אחוזים";
+      const baseFee = isPct ? (r.computedFee||0) : (r.value||0);
+      const totalFee = baseFee + (r.increases||0);
+      const remaining = totalFee - (r.paid||0);
+      const hasCEst = !!Number(exportBState.contractorEst||0);
+      const showFee = hasCEst || !isPct;
+      consRows.push([
+        r.field||"", r.name||"", r.payType||"",
+        isPct ? ((r.value||0)+"%") : (r.value||""),
+        showFee ? baseFee : "",
+        r.increases||0,
+        showFee ? totalFee : "",
+        r.paid||0,
+        showFee ? remaining : "",
+        r.planOnly>0 ? r.planOnly : "",
         r.noClaims ? "כן" : "לא",
-        r.notes,
+        r.notes||""
       ]);
     });
+    XLSX.utils.book_append_sheet(wb, makeSimple(consRows, [16,22,12,12,16,16,16,16,16,14,12,24]), "רשימת יועצים");
 
-    // סה"כ יועצים
-    var xConsTotal = 0, xConsPaid = 0;
-    exportAllRows.forEach(function(r) {
-      xConsTotal += (r.payType === "אחוזים" ? r.computedFee : r.value) + r.increases;
-      xConsPaid  += (r.paid || 0);
+    // 4. ריכוז חשבונות
+    const milestoneNameMap = {};
+    if (cId && milestones?.[cId]) {
+      Object.values(milestones[cId]).forEach(mList => {
+        (mList||[]).forEach(m => { milestoneNameMap["m-"+m.id] = { name: m.name||"", pct: m.pct||0, planOnly: !!m.planOnly }; });
+      });
+    }
+    (d.consultants||[]).forEach(con => {
+      (con.increases||[]).forEach(x => { milestoneNameMap["i-"+x.id] = { name: x.reason||"הגדלה", pct: 100 }; });
     });
-    budgetRows.push(["", "", "", "", "", "", "", ""]);
-    budgetRows.push(["סה כ יועצים", "", xConsTotal, xConsPaid, xConsTotal - xConsPaid, "", "", ""]);
+    const accRows = [["יועץ","שם אבן הדרך","אחוז","מס חשבון","תאריך קבלה","סכום","אישור מנהל פרויקט","אישור מנהל יחידה","אישור מזמין","הוחזר ליועץ","נדחה","תכנון בלבד","הערות"]];
+    (d.accounts||[]).forEach(r => {
+      const ms = milestoneNameMap[r.rowKey] || { name:"", pct:"" };
+      accRows.push([r.consultantName||"", ms.name, ms.pct, r.invoiceNum||"", r.receiptDate||"", r.amount||"",
+        r.pmApproved?"כן":"לא", r.unitManagerApproved?"כן":"לא", r.toMunicipality?"כן":"לא",
+        r.toConsultant?"כן":"לא", r.rejected?"כן":"לא", ms.planOnly?"כן":"לא", r.reason||""]);
+    });
+    XLSX.utils.book_append_sheet(wb, makeSimple(accRows, [18,22,8,12,14,14,14,14,14,12,10,12,22]), "ריכוז חשבונות");
 
-    // אגרות
+    // 5. תקציב הפרויקט
+    const budgetRows = [], budgetTypes = [];
+    const bPush = (row, type) => { budgetRows.push(row); budgetTypes.push(type); };
+
+    bPush(["סעיף","ערך","","","","","",""], "hdr");
+    bPush(["אומדן עירוני",       toNum(o.municipalEst  || bs.municipalEst),"","","","","",""], "info");
+    bPush(["אומדן קבלני",        toNum(o.contractorEst || bs.contractorEst),"","","","","",""], "info");
+    bPush(["כתב כמויות / מכרז", toNum(bs.tenderDocs),"","","","","",""], "info");
+    bPush(["חשבון קבלן סופי",   toNum(bs.finalAccount),"","","","","",""], "info");
+    bPush(["אישור ממונה עירוני", toNum(bs.approvalActual),"","","","","",""], "info");
+    bPush(["קיזוז דמי הקמה",    toNum(bs.setupOffset),"","","","","",""], "info");
+    (bs.extraItems||[]).forEach(x => bPush([x.desc||"תקציב שהתקבל", toNum(x.amount),"","","","","",""], "info"));
+    bPush(["","","","","","","",""], "empty");
+    bPush(["פירוט תקציב הפרויקט","","","","","","",""], "section");
+    bPush(["שם המקצוע","שם היועץ","סכום התקשרות","סכום ששולם","יתרה לתשלום","שלב תכנון","העדר תביעות","הערות"], "hdr");
+    let dIdx = 0;
+    exportAllRows.forEach(r => {
+      const baseFee  = r.payType === "אחוזים" ? r.computedFee : r.value;
+      const totalFee = baseFee + r.increases;
+      const remaining= totalFee - r.paid;
+      const hasBase  = !!Number(exportBState.contractorEst||0) || r.payType !== "אחוזים";
+      bPush([r.field, r.name, !hasBase?(r.value+"%"):totalFee, r.paid, !hasBase?"":remaining, r.planOnly>0?r.planOnly:"", r.noClaims?"כן":"לא", r.notes], dIdx++%2===0?"d0":"d1");
+    });
+    var xConsTotal = 0, xConsPaid = 0;
+    exportAllRows.forEach(r => { xConsTotal += (r.payType==="אחוזים"?r.computedFee:r.value)+r.increases; xConsPaid += (r.paid||0); });
+    bPush(["","","","","","","",""], "empty");
+    bPush(["סה כ יועצים","",xConsTotal,xConsPaid,xConsTotal-xConsPaid,"","",""], "total");
+
     var xFixedFeeNames = ["פיצויי נופי","מי אביבים - לא דמי הקמה","כיבוי אש","חח\"י","בזק","הוט","רשות העתיקות","תיק מידע"];
     var xFeeRows = bs.feeRows || xFixedFeeNames.map(function(name) { return { id:name, name:name, contract:"", paid:"", planOnly:"", noClaims:false, notes:"" }; });
-    var xExtraFee = (bs.extraFeeRows || []);
-    var xAllFees = xFeeRows.concat(xExtraFee);
+    var xAllFees = xFeeRows.concat(bs.extraFeeRows||[]);
     var xFeeTot = 0, xFeePaid = 0;
-    budgetRows.push(["", "", "", "", "", "", "", ""]);
-    budgetRows.push(["אגרות", "", "", "", "", "", "", ""]);
-    xAllFees.forEach(function(r) {
-      var c = Number(r.contract||0), p = Number(r.paid||0);
-      xFeeTot += c; xFeePaid += p;
-      budgetRows.push(["אגרות", r.name||"", c||"", p||"", r.noClaims?0:c-p, c||"", r.noClaims?"כן":"לא", r.notes||""]);
+    bPush(["","","","","","","",""], "empty");
+    bPush(["אגרות","","","","","","",""], "section");
+    xAllFees.forEach(function(r, i) {
+      var c=Number(r.contract||0), p=Number(r.paid||0); xFeeTot+=c; xFeePaid+=p;
+      bPush(["אגרות",r.name||"",c||"",p||"",r.noClaims?0:c-p,c||"",r.noClaims?"כן":"לא",r.notes||""], i%2===0?"d0":"d1");
     });
-    budgetRows.push(["סה כ אגרות", "", xFeeTot, xFeePaid, xFeeTot - xFeePaid, "", "", ""]);
+    bPush(["סה כ אגרות","",xFeeTot,xFeePaid,xFeeTot-xFeePaid,"","",""], "total");
 
-    // קבלן
-    var xCC = Number(bs.contractorContract||0);
-    var xCP = Number(bs.contractorPaid||0);
-    var xCNoClaims = !!bs.contractorNoClaims;
-    var xCPlanOnly = Number(bs.contractorPlanOnly||0);
-    var xCRem = xCNoClaims ? 0 : xCC - xCP;
-    budgetRows.push(["", "", "", "", "", "", "", ""]);
-    budgetRows.push(["קבלן", "", "", "", "", "", "", ""]);
-    budgetRows.push(["קבלן", "קבלן ראשי", xCC||"", xCP||"", xCRem, xCPlanOnly||"", xCNoClaims?"כן":"לא", bs.contractorNotes||""]);
-    budgetRows.push(["סה כ קבלן", "", xCC, xCP, xCRem, "", "", ""]);
+    var xCC=Number(bs.contractorContract||0), xCP=Number(bs.contractorPaid||0);
+    var xCNoClaims=!!bs.contractorNoClaims, xCPlanOnly=Number(bs.contractorPlanOnly||0), xCRem=xCNoClaims?0:xCC-xCP;
+    bPush(["","","","","","","",""], "empty");
+    bPush(["קבלן","","","","","","",""], "section");
+    bPush(["קבלן","קבלן ראשי",xCC||"",xCP||"",xCRem,xCPlanOnly||"",xCNoClaims?"כן":"לא",bs.contractorNotes||""], "d0");
+    bPush(["סה כ קבלן","",xCC,xCP,xCRem,"","",""], "total");
 
-    // תקורות
-    var xBase  = xConsTotal + xFeeTot + xCC;
-    var xOP    = Number(bs.overheadPct||4);
-    var xOA    = xBase * xOP / 100;
-    var xOPaid = Number(bs.overheadPaid||0);
-    var xOPlanOnly = Number(bs.overheadPlanOnly||0);
-    var xBB    = xBase + xOA;
-    var xBP    = Number(bs.bcmPct||0);
-    var xBA    = xBB * xBP / 100;
-    var xBPaid = Number(bs.bcmPaid||0);
-    var xBPlanOnly = Number(bs.bcmPlanOnly||0);
-    var xVP    = Number(bs.vatPct||18);
-    var xVA    = (xBB + xBA) * xVP / 100;
-    var xVPaid = Number(bs.vatPaid||0);
-    var xVPlanOnly = Number(bs.vatPlanOnly||0);
-    var xOhTot = xOA + xBA + xVA;
-    budgetRows.push(["", "", "", "", "", "", "", ""]);
-    budgetRows.push(["תקורות", "", "", "", "", "", "", ""]);
-    budgetRows.push(["תקורות חברה עירונית", xOP + "%", xOA, xOPaid, xOA-xOPaid, xOPlanOnly||"", "", bs.overheadNotes||""]);
-    budgetRows.push(["בצמ", xBP + "%", xBA, xBPaid, xBA-xBPaid, xBPlanOnly||"", "", bs.bcmNotes||""]);
-    budgetRows.push(["מעמ", xVP + "%", xVA, xVPaid, xVA-xVPaid, xVPlanOnly||"", "", bs.vatNotes||""]);
-    budgetRows.push(["סה כ תקורות", "", xOhTot, xOPaid+xBPaid+xVPaid, xOhTot-(xOPaid+xBPaid+xVPaid), "", "", ""]);
+    var xBase=xConsTotal+xFeeTot+xCC;
+    var xOP=Number(bs.overheadPct||4), xOA=xBase*xOP/100, xOPaid=Number(bs.overheadPaid||0), xOPlanOnly=Number(bs.overheadPlanOnly||0);
+    var xBB=xBase+xOA, xBP=Number(bs.bcmPct||0), xBA=xBB*xBP/100, xBPaid=Number(bs.bcmPaid||0), xBPlanOnly=Number(bs.bcmPlanOnly||0);
+    var xVP=Number(bs.vatPct||18), xVA=(xBB+xBA)*xVP/100, xVPaid=Number(bs.vatPaid||0), xVPlanOnly=Number(bs.vatPlanOnly||0);
+    var xOhTot=xOA+xBA+xVA;
+    bPush(["","","","","","","",""], "empty");
+    bPush(["תקורות","","","","","","",""], "section");
+    bPush(["תקורות חברה עירונית",xOP+"%",xOA,xOPaid,xOA-xOPaid,xOPlanOnly||"","",bs.overheadNotes||""], "d0");
+    bPush(["בצמ",xBP+"%",xBA,xBPaid,xBA-xBPaid,xBPlanOnly||"","",bs.bcmNotes||""], "d1");
+    bPush(["מעמ",xVP+"%",xVA,xVPaid,xVA-xVPaid,xVPlanOnly||"","",bs.vatNotes||""], "d0");
+    bPush(["סה כ תקורות","",xOhTot,xOPaid+xBPaid+xVPaid,xOhTot-(xOPaid+xBPaid+xVPaid),"","",""], "total");
 
-    // סה"כ כללי
-    var xGrand     = xConsTotal + xFeeTot + xCC + xOhTot;
-    var xGrandPaid = xConsPaid  + xFeePaid + xCP + xOPaid + xBPaid + xVPaid;
-    budgetRows.push(["", "", "", "", "", "", "", ""]);
-    budgetRows.push(["סה כ כללי", "", xGrand, xGrandPaid, xGrand - xGrandPaid, "", "", ""]);
+    var xGrand=xConsTotal+xFeeTot+xCC+xOhTot, xGrandPaid=xConsPaid+xFeePaid+xCP+xOPaid+xBPaid+xVPaid;
+    bPush(["","","","","","","",""], "empty");
+    bPush(["סה כ כללי","",xGrand,xGrandPaid,xGrand-xGrandPaid,"","",""], "grand");
 
-    const budgetWsFinal = XLSX.utils.aoa_to_sheet(budgetRows);
-    XLSX.utils.book_append_sheet(wb, budgetWsFinal, "תקציב הפרויקט");
+    const budgetWs = XLSX.utils.aoa_to_sheet(budgetRows);
+    finalize(budgetWs, [25,25,16,16,16,16,12,30]);
+    budgetTypes.forEach((type, r) => {
+      const s = type==="hdr" ? ST.H : type==="section" ? ST.S : type==="total" ? ST.T
+              : type==="grand" ? ST.G : type==="info" ? ST.I : type==="d1" ? ST.D1 : type==="empty" ? ST.E : ST.D0;
+      styleRow(budgetWs, r, s, 7);
+    });
+    XLSX.utils.book_append_sheet(wb, budgetWs, "תקציב הפרויקט");
 
     // 6. תוצאות מכרז
     const tenderRows = [["קבלן","הצעת מחיר","דירוג","הערות","נבחר"]];
-    (d.tender||[]).forEach(r => {
-      tenderRows.push([r.contractor||"", r.bid||"", r.rank||"", r.notes||"", r.selected?"כן":"לא"]);
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(tenderRows), "תוצאות מכרז");
-
-    // 7. חשבון קבלן סופי
-    const contractorRows = [["סעיף","תכנון","סופי","חשבונית","תאריך","סטטוס"]];
-    (d.contractor||[]).forEach(r => {
-      contractorRows.push([r.item||"", r.planned||"", r.actual||"", r.invoice||"",
-        r.date||"", r.status||""]);
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(contractorRows), "חשבון קבלן סופי");
+    (d.tender||[]).forEach(r => tenderRows.push([r.contractor||"", r.bid||"", r.rank||"", r.notes||"", r.selected?"כן":"לא"]));
+    XLSX.utils.book_append_sheet(wb, makeSimple(tenderRows, [25,15,10,30,10]), "תוצאות מכרז");
 
     const wbout = XLSX.write(wb, { bookType:"xlsx", type:"array" });
     const blob = new Blob([wbout], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    if (returnBlob) return blob;
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = blobUrl;
     a.download = (proj.name || "פרויקט").replace(/[\/\\:*?"<>|]/g, "_") + ".xlsx";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
   };
 
   // ── Backup all data to JSON ──────────────────────────────────────────────
-  const exportBackup = () => {
+  const exportBackup = () => setShowBackupConfirm(true);
+
+  const doBackup = async () => {
     const backup = { projects, allData, suppliers, companies, milestones, statsRows, exportedAt: new Date().toISOString() };
     const json = JSON.stringify(backup, null, 2);
     try { localStorage.setItem("proj_backup_latest", json); } catch(e) {}
-    // פתיחת חלון עם הטקסט לצורך העתקה ושמירה ידנית
+    const handle = backupDirRef.current;
+    if (handle) {
+      try {
+        const perm = await handle.requestPermission({ mode: "readwrite" });
+        if (perm === "granted") {
+          setShowBackupConfirm(false);
+          const ts = new Date().toISOString().slice(0,19).replace(/:/g,"-");
+          const jFh = await handle.getFileHandle(`costpilot-backup-${ts}.json`, { create: true });
+          const jW = await jFh.createWritable();
+          await jW.write(json); await jW.close();
+          const XLSX = window.XLSX;
+          if (XLSX && projects.length > 0) {
+            for (const proj of projects) {
+              try {
+                const blob = exportProjectToExcel(proj, { returnBlob: true });
+                if (!blob) continue;
+                const safeName = (proj.name||"פרויקט").replace(/[\/\\:*?"<>|]/g,"_");
+                const xFh = await handle.getFileHandle(`${safeName}.xlsx`, { create: true });
+                const xW = await xFh.createWritable();
+                await xW.write(blob); await xW.close();
+              } catch(e) {}
+            }
+          }
+          notify(`✅ גיבוי + אקסל נשמרו ב: ${handle.name}`);
+          return;
+        }
+      } catch(e) {}
+    }
+    setShowBackupConfirm(false);
     setBackupText(json);
     setShowBackupModal(true);
+  };
+
+  const chooseBackupDir = async () => {
+    try {
+      const handle = await window.showDirectoryPicker({ mode: "readwrite", startIn: "documents" });
+      await _bkpDB.save(handle);
+      backupDirRef.current = handle;
+      setBackupDirName(handle.name);
+      notify(`✅ תיקיית גיבוי הוגדרה: ${handle.name}`);
+    } catch(e) {}
   };
 
   const restoreFromStorage = () => {
@@ -4483,72 +4837,36 @@ function AppInner({ currentUser, userRole, setUserRole }) {
         {/* Logo */}
         <div style={{ padding:"20px 18px 16px", borderBottom:"1px solid #e2e8f0" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ width:38, height:38, borderRadius:10, background:"linear-gradient(135deg,#3b82f6,#2563eb)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🏗️</div>
+            <div style={{ fontSize:32 }}>🎯</div>
             <div>
-              <div style={{ fontSize:15, fontWeight:800, color:"#1e293b" }}>מנהל פרויקטים</div>
-              <div style={{ fontSize:11, color:"#94a3b8" }}>ניהול תקציב ופיננסים</div>
+              <div style={{ fontSize:20, fontWeight:900, color:"#2563eb", letterSpacing:-1 }}>CostPilot</div>
+              <div style={{ fontSize:11, color:"#94a3b8" }}>ניהול תקציב פרויקטים</div>
             </div>
           </div>
         </div>
 
-        {/* "פרויקטים" nav item */}
-        <div style={{ padding:"12px 10px 4px" }}>
-          <div className="hov-side"
-            onClick={() => { setSelectedProj(null); setGlobalPage(null); }}
-            style={{ display:"flex", alignItems:"center", gap:9, padding:"9px 11px", borderRadius:9, cursor:"pointer", fontSize:14, fontWeight:selectedProj?500:700, color:selectedProj?"#64748b":"#2563eb", background:selectedProj?"transparent":"#eff6ff", border:selectedProj?"1.5px solid transparent":"1.5px solid #bfdbfe", transition:"all .15s" }}>
-            <span style={{ fontSize:17 }}>📁</span> פרויקטים
-          </div>
-        </div>
-
-        {/* גיליון סטטיסטיקה nav item */}
-        <div style={{ padding:"0 10px 2px" }}>
-          <div className="hov-side"
-            onClick={() => { setShowStats(true); setSelectedProj(null); setGlobalPage(null); }}
-            style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 11px", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:500, color:"#64748b", transition:"all .15s" }}>
-            <span style={{ fontSize:16 }}>📊</span> גיליון סטטיסטיקה
-          </div>
-        </div>
-
-        {/* רשימת ספקים nav item */}
-        <div style={{ padding:"0 10px 2px" }}>
-          <div className="hov-side"
-            onClick={() => { setGlobalPage("dashboard"); setSelectedProj(null); setShowStats(false); }}
-            style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 11px", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:globalPage==="dashboard"?700:500, color:globalPage==="dashboard"?"#2563eb":"#64748b", background:globalPage==="dashboard"?"#eff6ff":"transparent", border:globalPage==="dashboard"?"1.5px solid #bfdbfe":"1.5px solid transparent", transition:"all .15s" }}>
-            <span style={{ fontSize:16 }}>📊</span> לוח בקרה
-          </div>
-        </div>
-        <div style={{ padding:"0 10px 2px" }}>
-          <div className="hov-side"
-            onClick={() => { setGlobalPage("suppliers"); setSelectedProj(null); setShowStats(false); }}
-            style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 11px", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:globalPage==="suppliers"?700:500, color:globalPage==="suppliers"?"#2563eb":"#64748b", background:globalPage==="suppliers"?"#eff6ff":"transparent", border:globalPage==="suppliers"?"1.5px solid #bfdbfe":"1.5px solid transparent", transition:"all .15s" }}>
-            <span style={{ fontSize:16 }}>📋</span> רשימת ספקים
-          </div>
-        </div>
-
-        {/* חברות עירוניות nav item */}
-        <div style={{ padding:"0 10px 2px" }}>
-          <div className="hov-side"
-            onClick={() => { setGlobalPage("companies"); setSelectedProj(null); setShowStats(false); }}
-            style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 11px", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:globalPage==="companies"?700:500, color:globalPage==="companies"?"#2563eb":"#64748b", background:globalPage==="companies"?"#eff6ff":"transparent", border:globalPage==="companies"?"1.5px solid #bfdbfe":"1.5px solid transparent", transition:"all .15s" }}>
-            <span style={{ fontSize:16 }}>🏛️</span> חברות עירוניות
-          </div>
-        </div>
-
-        {/* אבני דרך nav item */}
-        <div style={{ padding:"0 10px 4px" }}>
-          <div className="hov-side"
-            onClick={() => { setGlobalPage("milestones"); setSelectedProj(null); setShowStats(false); }}
-            style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 11px", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:globalPage==="milestones"?700:500, color:globalPage==="milestones"?"#2563eb":"#64748b", background:globalPage==="milestones"?"#eff6ff":"transparent", border:globalPage==="milestones"?"1.5px solid #bfdbfe":"1.5px solid transparent", transition:"all .15s" }}>
-            <span style={{ fontSize:16 }}>🚩</span> תבניות אבני דרך
-          </div>
-          <div onClick={() => { setGlobalPage("maininfo"); setSelectedProj(null); setShowStats(false); }}
-            style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 11px", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:globalPage==="maininfo"?700:500, color:globalPage==="maininfo"?"#2563eb":"#64748b", background:globalPage==="maininfo"?"#eff6ff":"transparent", border:globalPage==="maininfo"?"1.5px solid #bfdbfe":"1.5px solid transparent", transition:"all .15s" }}>
-            <span style={{ fontSize:16 }}>📋</span> מידע ראשי
-          </div>
-          <div onClick={() => { setGlobalPage("costs"); setSelectedProj(null); }}
-            style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 11px", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:globalPage==="costs"?700:500, color:globalPage==="costs"?"#2563eb":"#64748b", background:globalPage==="costs"?"#eff6ff":"transparent", border:globalPage==="costs"?"1.5px solid #bfdbfe":"1.5px solid transparent", transition:"all .15s" }}>
-            <span style={{ fontSize:16 }}>📊</span> השוואת עלויות
-          </div>
+        {/* Global nav items */}
+        <div style={{ padding:"12px 10px 4px", display:"flex", flexDirection:"column", gap:2 }}>
+          {[
+            { label:"לוח בקרה",          icon:"📊", action:()=>{ setGlobalPage("dashboard"); setSelectedProj(null); setShowStats(false); }, active: !selectedProj && globalPage==="dashboard" },
+            { label:"פרויקטים",           icon:"📁", action:()=>{ setSelectedProj(null); setGlobalPage(null); setShowStats(false); },          active: !selectedProj && !globalPage && !showStats, big:true },
+            { label:"מידע ראשי",          icon:"📋", action:()=>{ setGlobalPage("maininfo"); setSelectedProj(null); setShowStats(false); },   active: globalPage==="maininfo" },
+            { label:"רשימת ספקים",        icon:"🗂️", action:()=>{ setGlobalPage("suppliers"); setSelectedProj(null); setShowStats(false); },  active: globalPage==="suppliers" },
+            { label:"חברות עירוניות",     icon:"🏛️", action:()=>{ setGlobalPage("companies"); setSelectedProj(null); setShowStats(false); },  active: globalPage==="companies" },
+            { label:"תבניות אבני דרך",    icon:"🚩", action:()=>{ setGlobalPage("milestones"); setSelectedProj(null); setShowStats(false); }, active: globalPage==="milestones" },
+            { label:"גיליון סטטיסטיקה",   icon:"📈", action:()=>{ setShowStats(true); setSelectedProj(null); setGlobalPage(null); },          active: showStats },
+            { label:"השוואת עלויות",      icon:"⚖️", action:()=>{ setGlobalPage("costs"); setSelectedProj(null); setShowStats(false); },       active: globalPage==="costs" },
+          ].map(({label, icon, action, active, big}) => (
+            <div key={label} className="hov-side" onClick={action}
+              style={{ display:"flex", alignItems:"center", gap:9, padding: big?"9px 11px":"8px 11px", borderRadius:9, cursor:"pointer",
+                fontSize: big?14:13, fontWeight: active?700:500,
+                color: active?"#2563eb":"#64748b",
+                background: active?"#eff6ff":"transparent",
+                border: active?"1.5px solid #bfdbfe":"1.5px solid transparent",
+                transition:"all .15s" }}>
+              <span style={{ fontSize: big?17:16 }}>{icon}</span> {label}
+            </div>
+          ))}
         </div>
 
         {/* User info + logout */}
@@ -4578,9 +4896,9 @@ function AppInner({ currentUser, userRole, setUserRole }) {
         {/* Project list */}
         <div style={{ flex:1, overflowY:"auto", padding:"4px 10px 10px" }}>
           <div style={{ fontSize:10, color:"#94a3b8", fontWeight:700, letterSpacing:2, padding:"10px 3px 6px" }}>רשימת פרויקטים</div>
-          {visibleProjects.map(p => (
+          {sortedVisibleProjects.map(p => (
             <div key={p.id} className="hov-side"
-              onClick={() => { setSelectedProj(p); setActiveTab("budget"); setGlobalPage(null); }}
+              onClick={() => { setSelectedProj(p); setActiveTab("budget"); setGlobalPage(null); touchProject(p); }}
               style={{ display:"flex", alignItems:"center", gap:8, padding:"9px 11px", borderRadius:9, cursor:"pointer", marginBottom:2,
                 background:selectedProj?.id===p.id?"#eff6ff":"transparent",
                 border:selectedProj?.id===p.id?"1.5px solid #bfdbfe":"1.5px solid transparent",
@@ -4592,17 +4910,20 @@ function AppInner({ currentUser, userRole, setUserRole }) {
             </div>
           ))}
 
+          {isAdmin && (
           <button onClick={() => setShowModal(true)}
             style={{ width:"100%", marginTop:8, padding:"9px 11px", borderRadius:9, border:"1.5px dashed #cbd5e1", background:"transparent", color:"#64748b", fontSize:13, fontFamily:"'Heebo',sans-serif", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontWeight:500 }}
             onMouseOver={e => { e.currentTarget.style.borderColor="#3b82f6"; e.currentTarget.style.color="#3b82f6"; }}
             onMouseOut={e  => { e.currentTarget.style.borderColor="#cbd5e1"; e.currentTarget.style.color="#64748b"; }}>
             + פרויקט חדש
           </button>
+          )}
         </div>
 
         <div style={{ padding:"10px 16px", borderTop:"1px solid #e2e8f0", fontSize:11, color:"#94a3b8", textAlign:"right" }}>
           {projects.length} פרויקטים
         </div>
+        {isAdmin && (
         <div style={{ padding:"10px 12px", borderTop:"1px solid #e2e8f0", display:"flex", gap:6 }}>
           <button onClick={exportBackup}
             style={{ flex:1, padding:"6px 8px", background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:7, fontSize:11, color:"#1d4ed8", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>
@@ -4613,10 +4934,11 @@ function AppInner({ currentUser, userRole, setUserRole }) {
             <input type="file" accept=".json" style={{ display:"none" }} onChange={importBackup} />
           </label>
         </div>
+        )}
       </aside>
 
       {/* ── Main ── */}
-      <main style={{ flex:1, display:"flex", flexDirection:"column", overflowY:"auto" }}>
+      <main className={isAdmin?"":"view-only"} style={{ flex:1, display:"flex", flexDirection:"column", overflowY:"auto" }}>
 
         {/* Global pages: dashboard / suppliers / companies / milestones */}
         {!selectedProj && globalPage === "users" && isAdmin && (
@@ -4633,6 +4955,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                 setSelectedProj(proj);
                 setActiveTab(tab || "budget");
                 setGlobalPage(null);
+                touchProject(proj);
                 if (consultantId) {
                   setOpenConsultantId(consultantId);
                   setScrollToIncreaseId(increaseId || null);
@@ -4692,18 +5015,25 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                     onFocus={e=>e.target.style.borderColor="#3b82f6"} onBlur={e=>e.target.style.borderColor="#e2e8f0"}
                   />
                 </div>
+                <select value={projStatusFilter} onChange={e => setProjStatusFilter(e.target.value)}
+                  style={{ padding:"8px 12px", border:"1.5px solid #e2e8f0", borderRadius:9, fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", background:"#fff", color: projStatusFilter ? "#1e293b" : "#64748b", fontWeight: projStatusFilter ? 700 : 400, cursor:"pointer", direction:"rtl" }}>
+                  <option value="">כל הסטטוסים</option>
+                  {PROJ_STATUSES_MAIN.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
                 <PrimaryButton small onClick={() => setShowModal(true)}>+ פרויקט חדש</PrimaryButton>
               </div>
-              {visibleProjects.length === 0 && <div style={{ padding:32, textAlign:"right", color:"#94a3b8" }}>אין פרויקטים עדיין</div>}
+              {sortedVisibleProjects.length === 0 && <div style={{ padding:32, textAlign:"right", color:"#94a3b8" }}>אין פרויקטים עדיין</div>}
               {(() => {
                 const q = projSearch.trim().toLowerCase();
-                const filtered = q ? visibleProjects.filter(p => {
+                const filtered = sortedVisibleProjects.filter(p => {
+                  if (projStatusFilter && p.status !== projStatusFilter) return false;
+                  if (!q) return true;
                   const companyName = companies.find(c => String(c.id) === String(allData[p.id]?.companyId))?.name || "";
                   return p.name.toLowerCase().includes(q) || companyName.toLowerCase().includes(q);
-                }) : visibleProjects;
+                });
                 return filtered.map((p, i) => (
                 <div key={p.id} className="hov-row"
-                  onClick={() => { setSelectedProj(p); setActiveTab("budget"); setGlobalPage(null); }}
+                  onClick={() => { setSelectedProj(p); setActiveTab("budget"); setGlobalPage(null); touchProject(p); }}
                   style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 22px", borderBottom:i<visibleProjects.length-1?"1px solid #f1f5f9":"none", cursor:"pointer", transition:"background .15s" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:13 }}>
                     <div style={{ width:42, height:42, borderRadius:11, background:"linear-gradient(135deg,#dbeafe,#bfdbfe)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🏗️</div>
@@ -4714,8 +5044,8 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                     <Badge color={sc(p.status)}>{p.status}</Badge>
-                    <button onClick={e => { e.stopPropagation(); deleteProject(p.id); }}
-                      style={{ background:"#fef2f2", color:"#ef4444", border:"1px solid #fecaca", borderRadius:6, padding:"4px 10px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>מחק</button>
+                    {isAdmin && <button className="del-proj-btn" onClick={e => { e.stopPropagation(); setDeleteConfirmProj(p); }}
+                      style={{ background:"#fef2f2", color:"#ef4444", border:"1px solid #fecaca", borderRadius:6, padding:"5px 8px", fontSize:14, cursor:"pointer", lineHeight:1 }} title="מחק פרויקט">🗑</button>}
                     <span style={{ color:"#cbd5e1", fontSize:18 }}>‹</span>
                   </div>
                 </div>
@@ -4725,14 +5055,39 @@ function AppInner({ currentUser, userRole, setUserRole }) {
           </div>
         )}
 
-        {/* Project detail */}
-        {selectedProj && !isAdmin && (
-          <div style={{ position:"fixed", top:0, left:0, right:0, background:"#fef3c7", borderBottom:"2px solid #fcd34d", padding:"8px 20px", textAlign:"center", fontSize:13, fontWeight:600, color:"#92400e", zIndex:500, fontFamily:"'Heebo',sans-serif" }}>
-            👁 מצב צפייה בלבד — אין הרשאת עריכה
+        {/* Delete project confirmation modal */}
+        {deleteConfirmProj && (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.55)", zIndex:9000, display:"flex", alignItems:"center", justifyContent:"center" }}
+            onClick={() => setDeleteConfirmProj(null)}>
+            <div onClick={e => e.stopPropagation()}
+              style={{ background:"#fff", borderRadius:16, padding:"32px 36px", maxWidth:420, width:"90%", boxShadow:"0 24px 64px #0004", textAlign:"center", fontFamily:"'Heebo',sans-serif", direction:"rtl" }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>⚠️</div>
+              <div style={{ fontSize:18, fontWeight:900, color:"#1e293b", marginBottom:8 }}>מחיקת פרויקט</div>
+              <div style={{ fontSize:14, color:"#475569", marginBottom:6 }}>האם אתה בטוח שברצונך למחוק את הפרויקט:</div>
+              <div style={{ fontSize:16, fontWeight:800, color:"#dc2626", background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"8px 16px", marginBottom:16 }}>{deleteConfirmProj.name}</div>
+              <div style={{ fontSize:13, color:"#ef4444", fontWeight:700, marginBottom:24 }}>פעולה זו תמחק את כל נתוני הפרויקט לצמיתות ואינה ניתנת לביטול.</div>
+              <div style={{ display:"flex", gap:12, justifyContent:"center" }}>
+                <button onClick={() => setDeleteConfirmProj(null)}
+                  style={{ padding:"10px 28px", borderRadius:9, border:"1.5px solid #e2e8f0", background:"#f8fafc", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"'Heebo',sans-serif", color:"#475569" }}>
+                  ביטול
+                </button>
+                <button onClick={() => { deleteProject(deleteConfirmProj.id); setDeleteConfirmProj(null); }}
+                  style={{ padding:"10px 28px", borderRadius:9, border:"none", background:"#dc2626", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"'Heebo',sans-serif", boxShadow:"0 2px 8px #dc262644" }}>
+                  כן, מחק לצמיתות
+                </button>
+              </div>
+            </div>
           </div>
         )}
+
+        {/* Project detail */}
         {selectedProj && (
           <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1 }}>
+            {!isAdmin && (
+              <div style={{ background:"#fef3c7", borderBottom:"2px solid #fcd34d", padding:"8px 20px", textAlign:"center", fontSize:13, fontWeight:600, color:"#92400e", fontFamily:"'Heebo',sans-serif" }}>
+                👁 מצב צפייה בלבד — אין הרשאת עריכה
+              </div>
+            )}
             {/* Header bar */}
             {(() => {
               const projCompanyId = allData[selectedProj.id]?.companyId || "";
@@ -4753,44 +5108,47 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                   {/* מספר פרויקט */}
                   <ProjectNumber
                     value={allData[selectedProj.id]?.projectNumber || ""}
-                    onChange={v => setAllData(prev => ({ ...prev, [selectedProj.id]: { ...(prev[selectedProj.id]||makeProjectData()), projectNumber: v } }))}
+                    onChange={isAdmin ? (v => setAllData(prev => ({ ...prev, [selectedProj.id]: { ...(prev[selectedProj.id]||makeProjectData()), projectNumber: v } }))) : (()=>{})}
+                    readOnly={!isAdmin}
                   />
                   <div style={{ width:1, height:22, background:"#e2e8f0" }} />
                   {/* שנה */}
                   <EditableYear
                     year={selectedProj.year}
-                    onChange={yr => {
+                    onChange={isAdmin ? (yr => {
                       setProjects(prev => { const u = prev.map(p => p.id===selectedProj.id ? {...p,year:yr} : p); saveProjects(u); return u; });
                       setSelectedProj(prev => ({...prev, year: yr}));
-                    }}
+                    }) : (()=>{})}
+                    readOnly={!isAdmin}
                   />
                   <div style={{ width:1, height:22, background:"#e2e8f0" }} />
                   {/* חברה עירונית */}
-                  <select value={projCompanyId} onChange={e=>setCompanyId(e.target.value)}
-                    style={{ padding:"4px 8px", border:"1.5px solid #e2e8f0", borderRadius:8, fontSize:12, fontFamily:"'Heebo',sans-serif", background:"#f8fafc", color:"#64748b", outline:"none", cursor:"pointer", maxWidth:140, direction:"rtl" }}>
+                  <select value={projCompanyId} onChange={isAdmin?e=>setCompanyId(e.target.value):undefined}
+                    disabled={!isAdmin}
+                    style={{ padding:"4px 8px", border:"1.5px solid #e2e8f0", borderRadius:8, fontSize:12, fontFamily:"'Heebo',sans-serif", background:"#f8fafc", color:"#64748b", outline:"none", cursor:isAdmin?"pointer":"default", maxWidth:140, direction:"rtl" }}>
                     <option value="">חברה עירונית</option>
                     {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                   <div style={{ width:1, height:22, background:"#e2e8f0" }} />
                   {/* מנהל תכנון */}
-                  <input value={projPlanningMgr} onChange={e=>setPlanningMgr(e.target.value)}
-                    placeholder="מנהל תכנון"
-                    style={{ padding:"4px 8px", border:"1.5px solid #e2e8f0", borderRadius:8, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", background:"#f8fafc", color:"#1e293b", width:120, textAlign:"right", direction:"rtl" }}
-                    onFocus={e=>e.target.style.borderColor="#475569"} onBlur={e=>e.target.style.borderColor="#e2e8f0"} />
+                  <input value={projPlanningMgr} onChange={isAdmin?e=>setPlanningMgr(e.target.value):undefined}
+                    readOnly={!isAdmin} placeholder="מנהל תכנון"
+                    style={{ padding:"4px 8px", border:"1.5px solid #e2e8f0", borderRadius:8, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", background:"#f8fafc", color:"#1e293b", width:120, textAlign:"right", direction:"rtl", cursor:isAdmin?"text":"default" }}
+                    onFocus={isAdmin?e=>e.target.style.borderColor="#475569":undefined} onBlur={isAdmin?e=>e.target.style.borderColor="#e2e8f0":undefined} />
                   <div style={{ width:1, height:22, background:"#e2e8f0" }} />
                   {/* מנהל ביצוע */}
-                  <input value={projExecutionMgr} onChange={e=>setExecutionMgr(e.target.value)}
-                    placeholder="מנהל ביצוע"
-                    style={{ padding:"4px 8px", border:"1.5px solid #e2e8f0", borderRadius:8, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", background:"#f8fafc", color:"#1e293b", width:120, textAlign:"right", direction:"rtl" }}
-                    onFocus={e=>e.target.style.borderColor="#475569"} onBlur={e=>e.target.style.borderColor="#e2e8f0"} />
+                  <input value={projExecutionMgr} onChange={isAdmin?e=>setExecutionMgr(e.target.value):undefined}
+                    readOnly={!isAdmin} placeholder="מנהל ביצוע"
+                    style={{ padding:"4px 8px", border:"1.5px solid #e2e8f0", borderRadius:8, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", background:"#f8fafc", color:"#1e293b", width:120, textAlign:"right", direction:"rtl", cursor:isAdmin?"text":"default" }}
+                    onFocus={isAdmin?e=>e.target.style.borderColor="#475569":undefined} onBlur={isAdmin?e=>e.target.style.borderColor="#e2e8f0":undefined} />
                   <div style={{ width:1, height:22, background:"#e2e8f0" }} />
                   {/* ייצוא */}
-                  <button onClick={() => exportProjectToExcel(selectedProj)}
+                  <button onClick={() => exportProjectToExcel(selectedProj)} className="allow-readonly"
                     style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, padding:"5px 12px", fontSize:12, color:"#15803d", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, whiteSpace:"nowrap" }}>
                     📥 ייצוא לאקסל
                   </button>
                   {/* חזרה */}
-                  <button onClick={() => setSelectedProj(null)}
+                  <button onClick={() => setSelectedProj(null)} className="allow-readonly"
                     style={{ background:"#f1f5f9", border:"none", borderRadius:8, padding:"5px 12px", fontSize:12, color:"#64748b", cursor:"pointer", fontFamily:"'Heebo',sans-serif", whiteSpace:"nowrap" }}>
                     → חזרה
                   </button>
@@ -4801,7 +5159,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
             {/* Tabs bar */}
             <div style={{ background:"#fff", borderBottom:"1px solid #e2e8f0", padding:"0 30px", display:"flex", gap:0, overflowX:"auto" }}>
               {TABS.map(t => (
-                <button key={t.id} className="hov-tab"
+                <button key={t.id} className="hov-tab allow-readonly"
                   onClick={() => setActiveTab(t.id)}
                   style={{ padding:"12px 15px", border:"none", background:"transparent", fontSize:13,
                     fontWeight:activeTab===t.id?700:500,
@@ -4825,7 +5183,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
               />}
               {activeTab === "quotes"      && <QuotesTab      rows={getData(selectedProj.id,"quotes")}      setRows={makeTabSetter(selectedProj.id,"quotes")} highlightFieldId={highlightFieldId} suppliers={suppliers} budgetState={allData[selectedProj.id]?.budgetState||{}} openingData={allData[selectedProj.id]?.openingData||{}} statsRows={statsRows} />}
               {activeTab === "consultants" && <ConsultantsTab rows={getData(selectedProj.id,"consultants")} setRows={makeTabSetter(selectedProj.id,"consultants")} quotesRows={getData(selectedProj.id,"quotes")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} openConsultantId={openConsultantId} scrollToIncreaseId={scrollToIncreaseId} suppliers={suppliers} projectName={selectedProj.name} />}
-              {activeTab === "accounts"    && <AccountsTab    rows={getData(selectedProj.id,"accounts")}    setRows={makeTabSetter(selectedProj.id,"accounts")} quotesRows={getData(selectedProj.id,"quotes")} consultantsRows={getData(selectedProj.id,"consultants")} setConsultantsRows={makeTabSetter(selectedProj.id,"consultants")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} companyId={allData[selectedProj.id]?.companyId||""} milestones={milestones} openInvoiceId={openInvoiceId} openingData={allData[selectedProj.id]?.openingData||{}}
+              {activeTab === "accounts"    && <AccountsTab    rows={getData(selectedProj.id,"accounts")}    setRows={makeTabSetter(selectedProj.id,"accounts")} quotesRows={getData(selectedProj.id,"quotes")} consultantsRows={getData(selectedProj.id,"consultants")} setConsultantsRows={makeTabSetter(selectedProj.id,"consultants")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} companyId={allData[selectedProj.id]?.companyId||""} milestones={milestones} openInvoiceId={openInvoiceId} openingData={allData[selectedProj.id]?.openingData||{}} localMilestones={allData[selectedProj.id]?.localMilestones||{}} setLocalMilestones={val=>setAllData(prev=>({...prev,[selectedProj.id]:{...(prev[selectedProj.id]||makeProjectData()),localMilestones:val}}))}
                 onNavigate={(tab, consultantId) => {
                   setActiveTab(tab);
                   setOpenConsultantId(consultantId);
@@ -4887,7 +5245,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                   }}
                 />;
               })()}
-              {activeTab === "tender"      && <TenderTab      rows={getData(selectedProj.id,"tender")}      setRows={makeTabSetter(selectedProj.id,"tender")} />}
+              {activeTab === "tender"      && <TenderTab      rows={getData(selectedProj.id,"tender")}      setRows={makeTabSetter(selectedProj.id,"tender")} quotesRows={getData(selectedProj.id,"quotes")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} openingData={allData[selectedProj.id]?.openingData||{}} milestones={milestones} localMilestones={allData[selectedProj.id]?.localMilestones||{}} companyId={allData[selectedProj.id]?.companyId||""} />}
               {activeTab === "contractor"  && <ContractorTab  rows={getData(selectedProj.id,"contractor")}  setRows={makeTabSetter(selectedProj.id,"contractor")} />}
             </div>
           </div>
@@ -5052,6 +5410,36 @@ function AppInner({ currentUser, userRole, setUserRole }) {
         <div className="fade"
           style={{ position:"fixed", bottom:22, left:"50%", transform:"translateX(-50%)", background:"#1e293b", color:"#fff", borderRadius:11, padding:"11px 22px", fontSize:14, fontWeight:600, zIndex:2000, boxShadow:"0 8px 24px #0003" }}>
           {toast}
+        </div>
+      )}
+
+      {/* ── Backup Confirm Modal ── */}
+      {showBackupConfirm && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:3000 }}
+          onClick={() => setShowBackupConfirm(false)}>
+          <div className="fade" onClick={e => e.stopPropagation()}
+            style={{ background:"#fff", borderRadius:16, padding:"28px 32px", width:400, boxShadow:"0 24px 64px #0004", fontFamily:"'Heebo',sans-serif", direction:"rtl" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
+              <div style={{ fontSize:17, fontWeight:800, color:"#1e293b" }}>💾 גיבוי נתונים</div>
+              <button onClick={() => setShowBackupConfirm(false)}
+                style={{ background:"#f1f5f9", border:"none", borderRadius:8, width:30, height:30, fontSize:15, cursor:"pointer", color:"#64748b" }}>✕</button>
+            </div>
+            <div style={{ fontSize:12, fontWeight:700, color:"#64748b", marginBottom:6 }}>מיקום שמירה</div>
+            <div style={{ display:"flex", alignItems:"center", gap:10, background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:9, padding:"10px 14px", marginBottom:20 }}>
+              <span style={{ fontSize:18 }}>📁</span>
+              <span style={{ flex:1, fontSize:13, color: backupDirName?"#1e293b":"#94a3b8", fontWeight: backupDirName?600:400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                {backupDirName || "לא הוגדרה תיקייה"}
+              </span>
+              <button onClick={chooseBackupDir}
+                style={{ fontSize:11, padding:"4px 10px", borderRadius:6, border:"1.5px solid #93c5fd", background:"#eff6ff", color:"#1d4ed8", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, whiteSpace:"nowrap" }}>
+                שנה
+              </button>
+            </div>
+            <button onClick={doBackup}
+              style={{ width:"100%", padding:"11px", borderRadius:9, border:"none", background:"linear-gradient(135deg,#2563eb,#1d4ed8)", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>
+              {backupDirName ? "שמור גיבוי לתיקייה" : "שמור גיבוי (ידני)"}
+            </button>
+          </div>
         </div>
       )}
 
