@@ -1776,7 +1776,7 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
     setEditingMs(false);
   };
 
-  const getInvoices   = key => rows.filter(r=>r.consultantName===sel?.name && r.rowKey===key);
+  const getInvoices   = key => rows.filter(r=>r.consultantName===sel?.name && r.rowKey===key && (!r.fieldName || r.fieldName===sel?.field));
   const addInvoice = (key) => {
     if (!sel?.name) return;
     if (sel?.noClaims) return;
@@ -1790,25 +1790,7 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
       return [...prev, newRow];
     });
   };
-  const updateInvoice = (id, patch) => {
-    // Validate: prevent approved total from exceeding consultant's totalFee
-    if (sel && ("amount" in patch || "unitManagerApproved" in patch || "rejected" in patch)) {
-      const inv = rows.find(r => r.id === id);
-      if (inv) {
-        const updated = { ...inv, ...patch };
-        const isApproved = updated.unitManagerApproved && !updated.rejected;
-        const newAmt = isApproved ? Number(updated.amount||0) : 0;
-        const otherApproved = rows
-          .filter(r => r.id !== id && r.consultantName === sel.name && (!r.fieldName || r.fieldName === sel.field) && r.unitManagerApproved && !r.rejected)
-          .reduce((s,r) => s + Number(r.amount||0), 0);
-        if (newAmt + otherApproved > sel.totalFee) {
-          alert(`סכום החשבון המאושר (${(newAmt+otherApproved).toLocaleString("he-IL")} ₪) חורג מהתקציב המאושר ליועץ (${sel.totalFee.toLocaleString("he-IL")} ₪). לא ניתן לשמור.`);
-          return;
-        }
-      }
-    }
-    setRows(prev => prev.map(r=>r.id===id?{...r,...patch}:r));
-  };
+  const updateInvoice = (id, patch) => setRows(prev => prev.map(r=>r.id===id?{...r,...patch}:r));
   const removeInvoice = id => setRows(rows.filter(r=>r.id!==id));
 
   const setNoClaims = (val) => {
@@ -1942,12 +1924,28 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
                                       </td>
                                       <td style={{ padding:"4px 6px" }}>
                                         <NumericCell value={inv.amount||""} baseAmt={baseAmt} mode="amount"
-                                          onCommit={(amt,pct)=>updateInvoice(inv.id, pct?{amount:amt,pct}:{amount:amt})}
+                                          onCommit={(amt,pct) => {
+                                            if (baseAmt > 0 && Number(amt) > baseAmt) {
+                                              alert(`הסכום ${Number(amt).toLocaleString("he-IL")} ₪ חורג מסכום האבן דרך / ההגדלה (${baseAmt.toLocaleString("he-IL")} ₪)`);
+                                              return;
+                                            }
+                                            updateInvoice(inv.id, pct?{amount:amt,pct}:{amount:amt});
+                                          }}
                                           style={{ width:85 }} />
                                       </td>
                                       <td style={{ padding:"4px 6px" }}>
                                         <NumericCell value={inv.pct||""} baseAmt={baseAmt} mode="pct"
-                                          onCommit={(pct,amt)=>updateInvoice(inv.id, amt?{pct,amount:amt}:{pct})}
+                                          onCommit={(pct,amt) => {
+                                            if (Number(pct) > 100) {
+                                              alert("האחוז לא יכול לעלות על 100%");
+                                              return;
+                                            }
+                                            if (baseAmt > 0 && Number(amt) > baseAmt) {
+                                              alert(`הסכום המחושב ${Number(amt).toLocaleString("he-IL")} ₪ חורג מסכום האבן דרך / ההגדלה (${baseAmt.toLocaleString("he-IL")} ₪)`);
+                                              return;
+                                            }
+                                            updateInvoice(inv.id, amt?{pct,amount:amt}:{pct});
+                                          }}
                                           style={{ width:75 }} placeholder="0.00" />
                                       </td>
                                       {["pmApproved","unitManagerApproved","toMunicipality","toConsultant","rejected"].map(k=>(
@@ -2276,8 +2274,21 @@ function buildBudgetAllRows({ quotesRows, consultantsRows, budgetState, statsRow
     }
     return 0;
   };
+  // For old invoices without fieldName: attribute only to the first field this consultant appears in
+  const firstFieldMap = {};
+  (quotesRows || []).forEach(fg => {
+    (fg.consultants || []).forEach(c => {
+      if (!c.approved || !c.name?.trim()) return;
+      const n = c.name.trim();
+      if (!firstFieldMap[n]) firstFieldMap[n] = fg.fieldName || "";
+    });
+  });
   const paidByConsultant = (name, field) =>
-    (accountsRows || []).filter(r => r.consultantName === name && (!r.fieldName || r.fieldName === field) && r.unitManagerApproved && !r.rejected).reduce((s,r) => s + Number(r.amount||0), 0);
+    (accountsRows || []).filter(r => {
+      if (r.consultantName !== name || !r.unitManagerApproved || r.rejected) return false;
+      if (r.fieldName) return r.fieldName === field;
+      return (firstFieldMap[name] || "") === field;
+    }).reduce((s,r) => s + Number(r.amount||0), 0);
   const rows = [];
   (quotesRows || []).forEach(fg => {
     (fg.consultants || []).forEach(c => {
@@ -2286,7 +2297,7 @@ function buildBudgetAllRows({ quotesRows, consultantsRows, budgetState, statsRow
       const totalInc    = (consultantEntry?.increases || []).filter(x => x.approvedIncrease).reduce((s,x) => s + Number(x.amount||0), 0);
       const computedFee = computeFee(fg.fieldName, c.payType || "אחוזים", c.value);
       const paid        = paidByConsultant(c.name.trim(), fg.fieldName||"");
-      const planOnly    = (planOnlyMap||{})[c.name.trim()] || 0;
+      const planOnly    = (planOnlyMap||{})[(fg.fieldName||"") + "::" + c.name.trim()] || 0;
       const noClaims    = !!(consultantEntry?.noClaims);
       const notes       = consultantEntry?.notes || "";
       rows.push({
@@ -5729,28 +5740,26 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                 const cId    = allData[projId]?.companyId || "";
                 const qRows  = getData(projId,"quotes");
                 const cRows  = getData(projId,"consultants");
-                // build planOnlyMap: consultantName → sum of baseAmt for planOnly milestones + planOnly increases
+                // build planOnlyMap: derive directly from buildBudgetAllRows fees (same source as budget table)
+                // so no independent recalculation — values match exactly what ריכוז החשבון shows
+                const localMsMap = allData[projId]?.localMilestones || {};
+                const _baseRows = buildBudgetAllRows({ quotesRows: qRows, consultantsRows: cRows, budgetState: bState, statsRows, accountsRows: [], planOnlyMap: {} });
                 const planOnlyMap = {};
-                (qRows||[]).forEach(fg => {
-                  (fg.consultants||[]).forEach(c => {
-                    if (!c.approved || !c.name?.trim()) return;
-                    const isPct = (c.payType||"אחוזים")==="אחוזים";
-                    const pct   = Number(c.value||0)/100;
-                    let fee = 0;
-                    if (!isPct) fee = Number(c.value||0);
-                    else if (["אדריכל","אדריכלות","אדריכלים"].includes((fg.fieldName||"").trim()) && cEst) fee = archBase * pct;
-                    else if ((fg.fieldName||"").includes("מנהל פרויקט") && cEst) fee = cEst * pct;
-                    else if (cEst) { const pp = Number((statsRows||[]).find(r=>r.field===fg.fieldName)?.pct||0)/100; fee = cEst * pp * pct; }
-                    const ms = (milestones && cId) ? (milestones[cId]?.[fg.fieldName||""] || []) : [];
-                    const planTotal = ms.filter(m=>m.planOnly).reduce((s,m)=>s + fee * Number(m.pct||0)/100, 0);
-                    planOnlyMap[c.name.trim()] = (planOnlyMap[c.name.trim()]||0) + planTotal;
+                _baseRows.forEach(r => {
+                  if (r._manualRow) return;
+                  const key = r.field + "::" + r.name;
+                  const fee = r.payType === "אחוזים" ? r.computedFee : r.value;
+                  const ms = localMsMap[r.field] || ((milestones && cId) ? (milestones[cId]?.[r.field] || []) : []);
+                  ms.filter(m => m.planOnly).forEach(m => {
+                    planOnlyMap[key] = (planOnlyMap[key]||0) + fee * Number(m.pct||0) / 100;
                   });
                 });
                 // Add approved planOnly increases
                 (cRows||[]).forEach(con => {
                   if (!con.name?.trim()) return;
+                  const key = (con.role||"") + "::" + con.name.trim();
                   (con.increases||[]).filter(x => x.approvedIncrease && x.planOnly).forEach(x => {
-                    planOnlyMap[con.name.trim()] = (planOnlyMap[con.name.trim()]||0) + Number(x.amount||0);
+                    planOnlyMap[key] = (planOnlyMap[key]||0) + Number(x.amount||0);
                   });
                 });
                 return <BudgetTab
