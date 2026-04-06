@@ -4043,12 +4043,16 @@ function MilestonesPage({ companies, milestones, setMilestones, professions }) {
   const [copyFromCompany, setCopyFromCompany] = useState("");
   const [copyFromProf,    setCopyFromProf]    = useState("");
   const [showCopy,        setShowCopy]        = useState(false);
+  const [profFocused,     setProfFocused]     = useState(false);
+  const [copyProfSearch,  setCopyProfSearch]  = useState("");
+  const [copyProfFocused, setCopyProfFocused] = useState(false);
 
   // All professions = stats professions + any custom ones already used in this company
   const existingCompanyProfs = selCompany
     ? Object.keys(milestones[selCompany] || {})
     : [];
   const allProfs = [...new Set([...professions, ...existingCompanyProfs])];
+  const profSearchOpts = allProfs.filter(p => !customProf || p.startsWith(customProf));
 
   const companyMilestones = selCompany && selProf
     ? (milestones[selCompany]?.[selProf] || [])
@@ -4105,40 +4109,24 @@ function MilestonesPage({ companies, milestones, setMilestones, professions }) {
           {selCompany && (
             <div style={{ flex:1, minWidth:200 }}>
               <div style={{ fontSize:12, fontWeight:600, color:"#64748b", marginBottom:6 }}>בחר מקצוע *</div>
-              {addingProf ? (
-                <div style={{ position:"relative", display:"flex", gap:8 }}>
-                  <div style={{ flex:1, position:"relative" }}>
-                    <input autoFocus value={customProf} onChange={e=>setCustomProf(e.target.value)}
-                      placeholder="הקלד לחיפוש תחום..."
-                      style={{ width:"100%", padding:"9px 12px", border:"1.5px solid #3b82f6", borderRadius:9, fontSize:14, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
-                    {customProf && (() => {
-                      const opts = professions.filter(p => !existingCompanyProfs.includes(p) && p.toLowerCase().startsWith(customProf.toLowerCase()));
-                      return opts.length > 0 ? (
-                        <div style={{ position:"absolute", top:"100%", right:0, left:0, background:"#fff", border:"1.5px solid #e2e8f0", borderRadius:9, zIndex:200, boxShadow:"0 8px 24px #0002", maxHeight:220, overflowY:"auto", marginTop:2 }}>
-                          {opts.map(p => (
-                            <div key={p} onMouseDown={() => { setSelProf(p); setAddingProf(false); setCustomProf(""); }}
-                              style={{ padding:"9px 14px", cursor:"pointer", fontSize:14, color:"#1e293b", direction:"rtl", borderBottom:"1px solid #f1f5f9" }}
-                              onMouseOver={e=>e.currentTarget.style.background="#eff6ff"}
-                              onMouseOut={e=>e.currentTarget.style.background="#fff"}>{p}</div>
-                          ))}
-                        </div>
-                      ) : null;
-                    })()}
+              <div style={{ position:"relative" }}>
+                <input value={selProf || customProf}
+                  onChange={e => { setCustomProf(e.target.value); setSelProf(""); }}
+                  onFocus={()=>setProfFocused(true)}
+                  onBlur={()=>setTimeout(()=>setProfFocused(false),150)}
+                  placeholder="הקלד לחיפוש תחום..."
+                  style={{ width:"100%", padding:"9px 12px", border:"1.5px solid #e2e8f0", borderRadius:9, fontSize:14, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box", background:"#f8fafc" }} />
+                {profFocused && profSearchOpts.length > 0 && (
+                  <div style={{ position:"absolute", top:"100%", right:0, left:0, background:"#fff", border:"1.5px solid #e2e8f0", borderRadius:9, zIndex:200, boxShadow:"0 8px 24px #0002", maxHeight:220, overflowY:"auto", marginTop:2 }}>
+                    {profSearchOpts.map(p => (
+                      <div key={p} onMouseDown={() => { setSelProf(p); setCustomProf(""); setProfFocused(false); }}
+                        style={{ padding:"9px 14px", cursor:"pointer", fontSize:14, color:"#1e293b", direction:"rtl", borderBottom:"1px solid #f1f5f9", background: p===selProf?"#eff6ff":"#fff" }}
+                        onMouseOver={e=>e.currentTarget.style.background="#eff6ff"}
+                        onMouseOut={e=>e.currentTarget.style.background=p===selProf?"#eff6ff":"#fff"}>{p}</div>
+                    ))}
                   </div>
-                  <button onClick={()=>{ setAddingProf(false); setCustomProf(""); }}
-                    style={{ background:"#f1f5f9", color:"#64748b", border:"none", borderRadius:8, padding:"0 10px", fontSize:13, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>ביטול</button>
-                </div>
-              ) : (
-                <div style={{ display:"flex", gap:8 }}>
-                  <select value={selProf} onChange={e=>setSelProf(e.target.value)}
-                    style={{ flex:1, padding:"9px 12px", border:"1.5px solid #e2e8f0", borderRadius:9, fontSize:14, fontFamily:"'Heebo',sans-serif", background:"#f8fafc", outline:"none" }}>
-                    <option value="">-- בחר --</option>
-                    {allProfs.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                  <button onClick={()=>setAddingProf(true)}
-                    style={{ background:"#f8fafc", color:"#334155", border:"1px solid #e2e8f0", borderRadius:8, padding:"0 12px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif", whiteSpace:"nowrap", fontWeight:600 }}>+ תחום חדש</button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -4173,18 +4161,32 @@ function MilestonesPage({ companies, milestones, setMilestones, professions }) {
                 {copyFromCompany && (
                   <div>
                     <div style={{ fontSize:11, fontWeight:600, color:"#0369a1", marginBottom:4 }}>מקצוע</div>
-                    <select value={copyFromProf} onChange={e => {
-                      const prof = e.target.value;
-                      if (!prof) return;
-                      const source = milestones[copyFromCompany]?.[prof] || [];
-                      const copied = source.map(m => ({ ...m, id: Date.now() + Math.random() }));
-                      upd([...companyMilestones, ...copied]);
-                      setShowCopy(false); setCopyFromCompany(""); setCopyFromProf("");
-                    }}
-                      style={{ padding:"7px 10px", border:"1px solid #7dd3fc", borderRadius:7, fontSize:13, fontFamily:"'Heebo',sans-serif", background:"#fff", outline:"none" }}>
-                      <option value="">-- בחר מקצוע --</option>
-                      {Object.keys(milestones[copyFromCompany]||{}).map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
+                    <div style={{ position:"relative" }}>
+                      <input value={copyFromProf || copyProfSearch}
+                        onChange={e => { setCopyProfSearch(e.target.value); setCopyFromProf(""); }}
+                        onFocus={()=>setCopyProfFocused(true)}
+                        onBlur={()=>setTimeout(()=>setCopyProfFocused(false),150)}
+                        placeholder="הקלד לחיפוש מקצוע..."
+                        style={{ padding:"7px 10px", border:"1px solid #7dd3fc", borderRadius:7, fontSize:13, fontFamily:"'Heebo',sans-serif", background:"#fff", outline:"none", width:"100%", boxSizing:"border-box" }} />
+                      {copyProfFocused && (() => {
+                        const opts = Object.keys(milestones[copyFromCompany]||{}).filter(p => !copyProfSearch || p.startsWith(copyProfSearch));
+                        return opts.length > 0 ? (
+                          <div style={{ position:"absolute", top:"100%", right:0, left:0, background:"#fff", border:"1.5px solid #e2e8f0", borderRadius:9, zIndex:200, boxShadow:"0 8px 24px #0002", maxHeight:220, overflowY:"auto", marginTop:2 }}>
+                            {opts.map(p => (
+                              <div key={p} onMouseDown={() => {
+                                const source = milestones[copyFromCompany]?.[p] || [];
+                                const copied = source.map(m => ({ ...m, id: Date.now() + Math.random() }));
+                                upd([...companyMilestones, ...copied]);
+                                setShowCopy(false); setCopyFromCompany(""); setCopyFromProf(""); setCopyProfSearch("");
+                              }}
+                                style={{ padding:"9px 14px", cursor:"pointer", fontSize:13, color:"#1e293b", direction:"rtl", borderBottom:"1px solid #f1f5f9" }}
+                                onMouseOver={e=>e.currentTarget.style.background="#eff6ff"}
+                                onMouseOut={e=>e.currentTarget.style.background="#fff"}>{p}</div>
+                            ))}
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
                   </div>
                 )}
                 <button onClick={()=>{ setShowCopy(false); setCopyFromCompany(""); setCopyFromProf(""); }}
@@ -6035,7 +6037,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
           <MilestonesPage
             companies={companies}
             milestones={milestones} setMilestones={setMilestones}
-            professions={statsRows.map(r => r.field)}
+            professions={[...new Set([...statsRows.map(r => r.field), ...suppliers.map(s=>s.field).filter(Boolean)])]}
           />
         )}
 
