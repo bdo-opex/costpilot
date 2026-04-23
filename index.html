@@ -854,7 +854,7 @@ function ApprovalEmailModal({ toEmail, toName, subject, body, htmlBody, onSent, 
             לא עכשיו
           </button>
           <button onClick={() => { openOutlookEmail(toEmail, subject, body, htmlBody || null); onSent(); }}
-            style={{ padding:"8px 22px", borderRadius:8, border:"none", background:"#2563eb", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"'Heebo',sans-serif", color:"#fff" }}>
+            style={{ padding:"8px 22px", borderRadius:4, border:"none", background:"#0B1F3A", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"'Heebo',sans-serif", color:"#fff" }}>
             📧 כן — פתח Outlook
           </button>
         </div>
@@ -1469,7 +1469,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
                   סגור
                 </button>
                 <button onClick={downloadScopeEml}
-                  style={{ padding:"8px 22px", borderRadius:8, border:"none", background:"#2563eb", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"'Heebo',sans-serif", color:"#fff" }}>
+                  style={{ padding:"8px 22px", borderRadius:4, border:"none", background:"#0B1F3A", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"'Heebo',sans-serif", color:"#fff" }}>
                   📧 פתח ב-Outlook
                 </button>
               </div>
@@ -2029,7 +2029,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
                     )}
                     <div style={{ display:"flex", gap:8 }}>
                       <button onClick={saveNewEst}
-                        style={{ background:"#2563eb", color:"#fff", border:"none", borderRadius:7, padding:"6px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>
+                        style={{ background:"#0B1F3A", color:"#fff", border:"none", borderRadius:4, padding:"6px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>
                         שמור{supp!==0?" + צור הגדלה":""}
                       </button>
                       <button onClick={()=>{ setShowEstForm(false); setNewSectAmount(""); }}
@@ -4529,10 +4529,10 @@ function WorkScopesPage({ workScopes, setWorkScopes, suppliers, companies }) {
             return (
               <button key={cid} onClick={() => setOpenCompany(cid)}
                 style={{ padding:"8px 18px", borderRadius:"8px 8px 0 0", border:"1.5px solid", fontFamily:"'Heebo',sans-serif",
-                  borderColor: active ? "#2563eb" : "#e2e8f0",
-                  borderBottom: active ? "1.5px solid #fff" : "1.5px solid #e2e8f0",
-                  background: active ? "#fff" : "#f8fafc",
-                  color: active ? "#1d4ed8" : "#475569",
+                  borderColor: active ? "#0B1F3A" : "#E2E5EA",
+                  borderBottom: active ? "1.5px solid #fff" : "1.5px solid #E2E5EA",
+                  background: active ? "#fff" : "#F7F8FA",
+                  color: active ? "#0B1F3A" : "#595959",
                   fontWeight: active ? 800 : 500, fontSize:13, cursor:"pointer", marginBottom:"-1.5px" }}>
                 🏛️ {company.name}
               </button>
@@ -4664,7 +4664,7 @@ function SuppliersPage({ suppliers, setSuppliers, professions }) {
             }} />
           </label>
           <button onClick={openNew}
-            style={{ display:"flex", alignItems:"center", gap:7, padding:"9px 18px", background:"#2563eb", color:"#fff", border:"none", borderRadius:9, fontSize:13, fontWeight:700, fontFamily:"'Heebo',sans-serif", cursor:"pointer" }}>
+            style={{ display:"flex", alignItems:"center", gap:7, padding:"9px 18px", background:"#0B1F3A", color:"#fff", border:"none", borderRadius:4, fontSize:13, fontWeight:700, fontFamily:"'Heebo',sans-serif", cursor:"pointer" }}>
             + הוסף ספק חדש
           </button>
         </div>
@@ -4684,9 +4684,9 @@ function SuppliersPage({ suppliers, setSuppliers, professions }) {
       <Card style={{ padding:0, overflow:"hidden" }}>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, direction:"rtl" }}>
           <thead>
-            <tr style={{ background:"#f8fafc", borderBottom:"2px solid #e2e8f0" }}>
+            <tr style={{ background:"#F7F8FA", borderBottom:"2px solid #E2E5EA" }}>
               {["מקצוע / תחום","שם ספק / חברה","איש קשר","טלפון","נייד","מייל","הערות","פעולות"].map(h=>(
-                <th key={h} style={{ padding:"11px 16px", textAlign:"right", color:"#64748b", fontWeight:700, fontSize:11, whiteSpace:"nowrap" }}>{h}</th>
+                <th key={h} style={{ padding:"11px 16px", textAlign:"right", color:"#767676", fontWeight:700, fontSize:11, whiteSpace:"nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -4722,8 +4722,8 @@ function SuppliersPage({ suppliers, setSuppliers, professions }) {
             })}
           </tbody>
           <tfoot>
-            <tr style={{ background:"#f8fafc", borderTop:"2px solid #e2e8f0" }}>
-              <td colSpan={8} style={{ padding:"8px 16px", color:"#94a3b8", fontSize:12 }}>סה״כ {filtered.length} ספקים{search?" (מסונן)":""}</td>
+            <tr style={{ background:"#F7F8FA", borderTop:"2px solid #E2E5EA" }}>
+              <td colSpan={8} style={{ padding:"8px 16px", color:"#767676", fontSize:12 }}>סה״כ {filtered.length} ספקים{search?" (מסונן)":""}</td>
             </tr>
           </tfoot>
         </table>
@@ -4775,7 +4775,7 @@ function SuppliersPage({ suppliers, setSuppliers, professions }) {
                 </div>
               ))}
               <button onClick={addContact}
-                style={{ marginTop:8, background:"#f0f9ff", color:"#2563eb", border:"1.5px dashed #93c5fd", borderRadius:8, padding:"6px 14px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:700 }}>
+                style={{ marginTop:8, background:"#EAF1FA", color:"#163356", border:"1.5px dashed #B8CEED", borderRadius:4, padding:"6px 14px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:700 }}>
                 + הוסף איש קשר
               </button>
             </div>
@@ -4783,7 +4783,7 @@ function SuppliersPage({ suppliers, setSuppliers, professions }) {
             {editError && <div style={{ color:"#ef4444", fontSize:13, background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"8px 12px" }}>{editError}</div>}
             <div style={{ display:"flex", gap:10, justifyContent:"flex-start", marginTop:4 }}>
               <button onClick={saveModal}
-                style={{ padding:"9px 24px", background:"#2563eb", color:"#fff", border:"none", borderRadius:9, fontSize:14, fontWeight:700, fontFamily:"'Heebo',sans-serif", cursor:"pointer" }}>
+                style={{ padding:"9px 24px", background:"#0B1F3A", color:"#fff", border:"none", borderRadius:4, fontSize:14, fontWeight:700, fontFamily:"'Heebo',sans-serif", cursor:"pointer" }}>
                 {editId==="new"?"הוסף":"שמור"}
               </button>
               <button onClick={closeModal}
@@ -4880,7 +4880,7 @@ function CompaniesPage({ companies, setCompanies }) {
                 </div>
                 <div style={{ display:"flex", gap:8 }}>
                   <button onClick={()=>{ setEditId(c.id); setEditForm({...c}); }}
-                    style={{ background:"#f0f9ff", color:"#0369a1", border:"1px solid #bae6fd", borderRadius:6, padding:"4px 12px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>עריכה</button>
+                    style={{ background:"#EAF1FA", color:"#163356", border:"1px solid #B8CEED", borderRadius:4, padding:"4px 12px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>עריכה</button>
                   <DeleteButton onClick={()=>del(c.id)} />
                 </div>
               </div>
@@ -4983,7 +4983,7 @@ function ManagersPage({ managers, setManagers }) {
                 <div style={{ display:"flex", alignItems:"center", gap:14 }}>
                   <div style={{ width:40, height:40, borderRadius:10, background:"linear-gradient(135deg,#fef9c3,#fde68a)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>👔</div>
                   <div>
-                    <div style={{ fontWeight:700, fontSize:14, color:"#1e293b" }}>{m.name} <span style={{ fontSize:12, color:"#2563eb", fontWeight:600, marginRight:6 }}>{roleLabel(m.role)}</span></div>
+                    <div style={{ fontWeight:700, fontSize:14, color:"#0D0D0D" }}>{m.name} <span style={{ fontSize:12, color:"#163356", fontWeight:600, marginRight:6 }}>{roleLabel(m.role)}</span></div>
                     <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>
                       {[m.email, m.phone].filter(Boolean).join(" · ")}
                     </div>
@@ -4991,7 +4991,7 @@ function ManagersPage({ managers, setManagers }) {
                 </div>
                 <div style={{ display:"flex", gap:8 }}>
                   <button onClick={()=>{ setEditId(m.id); setEditForm({...m}); }}
-                    style={{ background:"#f0f9ff", color:"#0369a1", border:"1px solid #bae6fd", borderRadius:6, padding:"4px 12px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>עריכה</button>
+                    style={{ background:"#EAF1FA", color:"#163356", border:"1px solid #B8CEED", borderRadius:4, padding:"4px 12px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>עריכה</button>
                   <DeleteButton onClick={()=>del(m.id)} />
                 </div>
               </div>
@@ -5506,7 +5506,7 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
           </div>
           <div style={{ borderTop:"1px solid #f1f5f9", paddingTop:6, display:"flex", justifyContent:"flex-end" }}>
             <button onClick={closeDropdown}
-              style={{ background:"#2563eb", color:"#fff", border:"none", borderRadius:5, padding:"5px 14px", fontSize:12, cursor:"pointer", fontWeight:600 }}>אישור</button>
+              style={{ background:"#0B1F3A", color:"#fff", border:"none", borderRadius:4, padding:"5px 14px", fontSize:12, cursor:"pointer", fontWeight:600 }}>אישור</button>
           </div>
         </div>
       </>,
@@ -5605,22 +5605,22 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#f8fafc"}">${row.ce
         <div style={{ overflowX:"auto" }}>
           <table style={{ borderCollapse:"collapse", fontSize:12, direction:"rtl", width:"max-content", minWidth:"100%" }}>
             <thead>
-              <tr style={{ background:"#f8fafc", borderBottom:"2px solid #e2e8f0" }}>
+              <tr style={{ background:"#F7F8FA", borderBottom:"2px solid #E2E5EA" }}>
                 {cols.map(({label,w,fkey}) => {
                   const active = fkey && isFiltered(fkey);
                   return (
                     <th key={label} style={{ padding:"8px 8px 8px 4px", textAlign:"right", fontWeight:700, fontSize:11,
-                      whiteSpace:"nowrap", width:w, minWidth:w, borderLeft:"1px solid #f1f5f9",
-                      color: active ? "#2563eb" : "#64748b",
-                      background: active ? "#eff6ff" : "#f8fafc" }}>
+                      whiteSpace:"nowrap", width:w, minWidth:w, borderLeft:"1px solid #F0F2F5",
+                      color: active ? "#0B1F3A" : "#767676",
+                      background: active ? "#EAF1FA" : "#F7F8FA" }}>
                       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:4 }}>
                         <span>{label}</span>
                         {fkey && (
                           <button onClick={e=>openDropdown(fkey,e)}
                             title="סינון"
                             style={{ background:"none", border:"none", cursor:"pointer", padding:"1px 3px", borderRadius:3,
-                              color: active ? "#2563eb" : "#94a3b8", fontSize:10, lineHeight:1,
-                              background: active ? "#dbeafe" : "transparent" }}>
+                              color: active ? "#0B1F3A" : "#9A9A9A", fontSize:10, lineHeight:1,
+                              background: active ? "#D4E4F4" : "transparent" }}>
                             {active ? "▼" : "▾"}
                           </button>
                         )}
@@ -5658,16 +5658,16 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#f8fafc"}">${row.ce
                 const _received  = (_bs.extraItems||[]).reduce((s,x)=>s+Number(x.amount||0),0);
                 const budgetUtilPct = _received > 0 ? _grandPaid / _received * 100 : null;
                 return (
-                  <tr key={p.id} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafbfd" }}>
-                    <td style={{ padding:"6px 8px", borderLeft:"1px solid #f1f5f9" }}>{inp(p.id,"projectNumber",d.projectNumber)}</td>
-                    <td style={{ padding:"6px 8px", borderLeft:"1px solid #f1f5f9", fontWeight:600 }}>
+                  <tr key={p.id} style={{ borderBottom:"1px solid #F0F2F5", background:i%2===0?"#fff":"#FAFBFC" }}>
+                    <td style={{ padding:"6px 8px", borderLeft:"1px solid #F0F2F5" }}>{inp(p.id,"projectNumber",d.projectNumber)}</td>
+                    <td style={{ padding:"6px 8px", borderLeft:"1px solid #F0F2F5", fontWeight:600 }}>
                       <span onClick={() => onNavigate && onNavigate(p)}
-                        style={{ fontWeight:600, fontSize:13, color:"#2563eb", cursor:"pointer", textDecoration:"underline", textDecorationStyle:"dotted" }}
-                        onMouseOver={e=>e.target.style.color="#1d4ed8"} onMouseOut={e=>e.target.style.color="#2563eb"}>
+                        style={{ fontWeight:600, fontSize:13, color:"#0B1F3A", cursor:"pointer", textDecoration:"underline", textDecorationStyle:"dotted" }}
+                        onMouseOver={e=>e.target.style.color="#112D52"} onMouseOut={e=>e.target.style.color="#0B1F3A"}>
                         {p.name}
                       </span>
                     </td>
-                    <td style={{ padding:"6px 8px", borderLeft:"1px solid #f1f5f9", color:"#374151" }}>{company?.name||"—"}</td>
+                    <td style={{ padding:"6px 8px", borderLeft:"1px solid #F0F2F5", color:"#3A3A3A" }}>{company?.name||"—"}</td>
                     <td style={{ padding:"6px 8px", borderLeft:"1px solid #f1f5f9" }}>{inp(p.id,"address",o.address)}</td>
                     <td style={{ padding:"6px 8px", borderLeft:"1px solid #f1f5f9" }}>{inp(p.id,"workDescription",o.workDescription)}</td>
                     <td style={{ padding:"6px 8px", borderLeft:"1px solid #f1f5f9" }}>{inp(p.id,"planningManager",d.planningManager)}</td>
@@ -5814,30 +5814,30 @@ function CostsPage({ allData, projects, statsRows }) {
         ) : (
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, direction:"rtl" }}>
             <thead>
-              <tr style={{ background:"#f8fafc", borderBottom:"2px solid #e2e8f0" }}>
+              <tr style={{ background:"#F7F8FA", borderBottom:"2px solid #E2E5EA" }}>
                 {["פרויקט","שטח (מ״ר)","תחום","שם יועץ","סכום (ש״ח)"].map(h => (
-                  <th key={h} style={{ padding:"9px 14px", textAlign:"right", color:"#64748b", fontWeight:700, fontSize:11 }}>{h}</th>
+                  <th key={h} style={{ padding:"9px 14px", textAlign:"right", color:"#767676", fontWeight:700, fontSize:11 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.map((r, i) => (
-                <tr key={i} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafbfd" }}>
-                  <td style={{ padding:"10px 14px", fontWeight:600, color:"#1e293b" }}>{r.projName}</td>
-                  <td style={{ padding:"10px 14px", color:"#374151" }}>{r.area ? r.area.toLocaleString("en-US") : "—"}</td>
-                  <td style={{ padding:"10px 14px", color:"#374151" }}>{r.field}</td>
-                  <td style={{ padding:"10px 14px", color:"#374151" }}>{r.consultant}</td>
-                  <td style={{ padding:"10px 14px", color:"#1e293b" }}>{fmt(r.fee)}</td>
+                <tr key={i} style={{ borderBottom:"1px solid #F0F2F5", background:i%2===0?"#fff":"#FAFBFC" }}>
+                  <td style={{ padding:"10px 14px", fontWeight:600, color:"#0D0D0D" }}>{r.projName}</td>
+                  <td style={{ padding:"10px 14px", color:"#3A3A3A" }}>{r.area ? r.area.toLocaleString("en-US") : "—"}</td>
+                  <td style={{ padding:"10px 14px", color:"#3A3A3A" }}>{r.field}</td>
+                  <td style={{ padding:"10px 14px", color:"#3A3A3A" }}>{r.consultant}</td>
+                  <td style={{ padding:"10px 14px", color:"#0D0D0D" }}>{fmt(r.fee)}</td>
                 </tr>
               ))}
             </tbody>
             {filtered.filter(r => r.fee > 0).length > 0 && (
               <tfoot>
-                <tr style={{ background:"#f8fafc", borderTop:"2px solid #e2e8f0" }}>
-                  <td colSpan={4} style={{ padding:"10px 14px", textAlign:"right", fontWeight:700, color:"#374151", fontSize:13 }}>
+                <tr style={{ background:"#F7F8FA", borderTop:"2px solid #E2E5EA" }}>
+                  <td colSpan={4} style={{ padding:"10px 14px", textAlign:"right", fontWeight:700, color:"#3A3A3A", fontSize:13 }}>
                     ממוצע ({filtered.filter(r=>r.fee>0).length} יועצים)
                   </td>
-                  <td style={{ padding:"10px 14px", fontWeight:700, color:"#1e293b", fontSize:13 }}>
+                  <td style={{ padding:"10px 14px", fontWeight:700, color:"#0D0D0D", fontSize:13 }}>
                     {fmt(filtered.filter(r=>r.fee>0).reduce((s,r)=>s+r.fee,0) / filtered.filter(r=>r.fee>0).length)}
                   </td>
                 </tr>
@@ -6068,9 +6068,9 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
           openOutlookEmail(item.managerEmail, subjectMap[item.stage] || "CostPilot — תזכורת", buildBody());
           if (onMarkEmailSent) onMarkEmailSent(item);
         }}
-        style={{ padding:"4px 10px", fontSize:11, fontWeight:700, borderRadius:7, border:"none", cursor:"pointer", fontFamily:"'Heebo',sans-serif", whiteSpace:"nowrap",
-          background: isBlinking ? "#fef3c7" : "#dbeafe",
-          color: isBlinking ? "#92400e" : "#1d4ed8",
+        style={{ padding:"4px 10px", fontSize:11, fontWeight:700, borderRadius:4, border:"none", cursor:"pointer", fontFamily:"'Heebo',sans-serif", whiteSpace:"nowrap",
+          background: isBlinking ? "#FAF2E6" : "#EAF1FA",
+          color: isBlinking ? "#5C3D10" : "#163356",
           animation: isBlinking ? "reminder-blink 1.2s ease-in-out infinite" : "none" }}>
         📧 {isBlinking ? "תזכורת!" : "תזכורת"}
       </button>
@@ -6078,30 +6078,30 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
   };
 
   const zones = [
-    { title:"ממתין להמלצה על יועצים", items:zoneA,  color:"#374151", bg:"#fffbeb", border:"#fde68a", icon:"⏳", emptyText:"אין פריטים ממתינים" },
-    { title:"ממתין להעברה לאישור מנהל", items:zoneIncSend, color:"#b45309", bg:"#fff7ed", border:"#fcd34d", icon:"📨", emptyText:"אין הגדלות הממתינות להעברה למנהל" },
-    { title:"ממתין לאישור מנהל פרויקט",                    items:zoneB,  color:"#0891b2", bg:"#ecfeff", border:"#a5f3fc", icon:"👤", emptyText:"אין חשבונות הממתינים לאישור מנהל פרויקט", groupByManager:true },
-    { title:"ממתין לאישור מנהל יחידה",                     items:zoneUM, color:"#7c3aed", bg:"#f5f3ff", border:"#c4b5fd", icon:"👔", emptyText:"אין חשבונות הממתינים לאישור מנהל יחידה" },
-    { title:"הוחזר ליועץ לתיקון",                           items:zoneC,  color:"#dc2626", bg:"#fef2f2", border:"#fecaca", icon:"↩️", emptyText:"אין חשבונות שהוחזרו ליועץ" },
-    { title:"ממתין להעברה לחברה העירונית",                  items:zoneSend, color:"#0369a1", bg:"#f0f9ff", border:"#7dd3fc", icon:"📋", emptyText:"אין יועצים הממתינים להעברה" },
-    { title:"ממתין לאישור מזמין",                           items:[...zone2, ...zone3], color:"#334155", bg:"#eff6ff", border:"#bfdbfe", icon:"📤", emptyText:"אין פריטים הממתינים לאישור מזמין" },
+    { title:"ממתין להמלצה על יועצים", items:zoneA,  color:"#5C3D10", bg:"#FAF2E6", border:"#F5E6CC", icon:"⏳", emptyText:"אין פריטים ממתינים" },
+    { title:"ממתין להעברה לאישור מנהל", items:zoneIncSend, color:"#5C3D10", bg:"#FAF2E6", border:"#F5E6CC", icon:"📨", emptyText:"אין הגדלות הממתינות להעברה למנהל" },
+    { title:"ממתין לאישור מנהל פרויקט",                    items:zoneB,  color:"#163356", bg:"#EAF1FA", border:"#D4E4F4", icon:"👤", emptyText:"אין חשבונות הממתינים לאישור מנהל פרויקט", groupByManager:true },
+    { title:"ממתין לאישור מנהל יחידה",                     items:zoneUM, color:"#163356", bg:"#EAF1FA", border:"#D4E4F4", icon:"👔", emptyText:"אין חשבונות הממתינים לאישור מנהל יחידה" },
+    { title:"הוחזר ליועץ לתיקון",                           items:zoneC,  color:"#5C2020", bg:"#F8EDED", border:"#F0D8D8", icon:"↩️", emptyText:"אין חשבונות שהוחזרו ליועץ" },
+    { title:"ממתין להעברה לחברה העירונית",                  items:zoneSend, color:"#163356", bg:"#EAF1FA", border:"#D4E4F4", icon:"📋", emptyText:"אין יועצים הממתינים להעברה" },
+    { title:"ממתין לאישור מזמין",                           items:[...zone2, ...zone3], color:"#0C5749", bg:"#EEF9F7", border:"#D4F3EE", icon:"📤", emptyText:"אין פריטים הממתינים לאישור מזמין" },
   ];
 
   const visibleZones = zones.filter(z => z.items.length > 0);
 
   return (
-    <div className="fade" style={{ padding:"34px 38px", display:"flex", flexDirection:"column", gap:0 }}>
+    <div className="fade" style={{ padding:"28px 32px", display:"flex", flexDirection:"column", gap:0 }}>
       {tt.visible && (
-        <div style={{ position:"fixed", left:tt.x+14, top:tt.y-36, zIndex:9999, background:"#1e293b", color:"#fff",
-          padding:"5px 12px", borderRadius:7, fontSize:13, pointerEvents:"none", maxWidth:340,
+        <div style={{ position:"fixed", left:tt.x+14, top:tt.y-36, zIndex:9999, background:"#0B1F3A", color:"#fff",
+          padding:"5px 12px", borderRadius:4, fontSize:12, pointerEvents:"none", maxWidth:340,
           wordBreak:"break-word", boxShadow:"0 2px 8px rgba(0,0,0,.25)" }}>
           {tt.text}
         </div>
       )}
       <div style={{ marginBottom:24 }}>
-        <div style={{ fontSize:11, color:"#475569", fontWeight:700, letterSpacing:3, marginBottom:4 }}>גיליון גלובלי</div>
-        <h1 style={{ fontSize:26, fontWeight:900, color:"#1e293b" }}>לוח בקרה</h1>
-        <div style={{ fontSize:13, color:"#64748b", marginTop:2 }}>מעקב סטטוס יועצים, הגדלות וחשבונות בכל הפרויקטים</div>
+        <div style={{ fontSize:11, color:"#767676", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>גיליון גלובלי</div>
+        <h1 style={{ fontSize:22, fontWeight:700, color:"#0D0D0D" }}>לוח בקרה</h1>
+        <div style={{ fontSize:13, color:"#767676", marginTop:2 }}>מעקב סטטוס יועצים, הגדלות וחשבונות בכל הפרויקטים</div>
       </div>
 
       {visibleZones.length === 0 ? (
@@ -6123,9 +6123,9 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
                   {COLS.map(([,w]) => <col key={w} style={{ width:w }} />)}
                 </colgroup>
                 <thead>
-                  <tr style={{ background:"#f8fafc", borderBottom:"1px solid #e2e8f0" }}>
+                  <tr style={{ background:"#F7F8FA", borderBottom:"1px solid #E2E5EA" }}>
                     {COLS.map(([h]) => (
-                      <th key={h} style={{ padding:"8px 18px", textAlign:"right", fontSize:11, fontWeight:700, color:"#94a3b8" }}>{h}</th>
+                      <th key={h} style={{ padding:"8px 18px", textAlign:"right", fontSize:11, fontWeight:700, color:"#767676" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -6136,17 +6136,17 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
                         const isHighlighted = highlightKey === item.key;
                         return (
                           <tr key={item.key} onClick={() => handleClick(item)}
-                            style={{ cursor:"pointer", borderBottom: i < zone.items.length-1 ? "1px solid #f1f5f9" : "none",
-                              background: isHighlighted ? "#dbeafe" : i%2===0?"#fff":"#fafbfd", transition:"background .15s" }}
-                            onMouseOver={e => { if(!isHighlighted) e.currentTarget.style.background="#f0f9ff"; }}
-                            onMouseOut={e  => { if(!isHighlighted) e.currentTarget.style.background=i%2===0?"#fff":"#fafbfd"; }}>
+                            style={{ cursor:"pointer", borderBottom: i < zone.items.length-1 ? "1px solid #F0F2F5" : "none",
+                              background: isHighlighted ? "#EAF1FA" : i%2===0?"#fff":"#FAFBFC", transition:"background .15s" }}
+                            onMouseOver={e => { if(!isHighlighted) e.currentTarget.style.background="#EFF1F5"; }}
+                            onMouseOut={e  => { if(!isHighlighted) e.currentTarget.style.background=i%2===0?"#fff":"#FAFBFC"; }}>
                             <td style={{ padding:"11px 18px" }}><TypeBadge type={item.type} /></td>
-                            <td style={{ padding:"11px 18px", fontSize:13, fontWeight:600, color:"#1e293b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.projName}</td>
-                            <td style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.fieldName}</td>
-                            <td style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.label !== "—" ? item.label : "—"}</td>
-                            <td onMouseEnter={e=>showTt(item.detail||item.tooltip||"",e)} onMouseMove={moveTt} onMouseLeave={hideTt} style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.detail || item.tooltip || "—"}</td>
+                            <td style={{ padding:"11px 18px", fontSize:13, fontWeight:600, color:"#0D0D0D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.projName}</td>
+                            <td style={{ padding:"11px 18px", fontSize:13, color:"#3A3A3A", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.fieldName}</td>
+                            <td style={{ padding:"11px 18px", fontSize:13, color:"#3A3A3A", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.label !== "—" ? item.label : "—"}</td>
+                            <td onMouseEnter={e=>showTt(item.detail||item.tooltip||"",e)} onMouseMove={moveTt} onMouseLeave={hideTt} style={{ padding:"11px 18px", fontSize:13, color:"#3A3A3A", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.detail || item.tooltip || "—"}</td>
                             <td style={{ padding:"11px 18px", fontSize:13, fontWeight:700, color:zone.color, whiteSpace:"nowrap" }}>{fmtVal(item)}</td>
-                            <td style={{ padding:"11px 18px", fontSize:12, color:"#94a3b8", whiteSpace:"nowrap" }}>{new Date(item.createdAt || Date.now()).toLocaleDateString("en-GB")}</td>
+                            <td style={{ padding:"11px 18px", fontSize:12, color:"#767676", whiteSpace:"nowrap" }}>{new Date(item.createdAt || Date.now()).toLocaleDateString("en-GB")}</td>
                             <td style={{ padding:"6px 10px" }}><ReminderButton item={item} /></td>
                           </tr>
                         );
@@ -6163,7 +6163,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
                     return groups.map(group => (
                       <React.Fragment key={group.mgr}>
                         <tr>
-                          <td colSpan={COLS.length} style={{ padding:"7px 18px", background:"#e0f2fe", borderTop:"1px solid #bae6fd", borderBottom:"1px solid #bae6fd", fontSize:12, fontWeight:800, color:"#0369a1" }}>
+                          <td colSpan={COLS.length} style={{ padding:"7px 18px", background:"#EEF0F4", borderTop:"1px solid #E2E5EA", borderBottom:"1px solid #E2E5EA", fontSize:12, fontWeight:700, color:"#163356" }}>
                             👤 {group.mgr}
                           </td>
                         </tr>
@@ -6171,17 +6171,17 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
                           const isHighlighted = highlightKey === item.key;
                           return (
                             <tr key={item.key} onClick={() => handleClick(item)}
-                              style={{ cursor:"pointer", borderBottom: i < group.items.length-1 ? "1px solid #f1f5f9" : "none",
-                                background: isHighlighted ? "#dbeafe" : i%2===0?"#fff":"#fafbfd", transition:"background .15s" }}
-                              onMouseOver={e => { if(!isHighlighted) e.currentTarget.style.background="#f0f9ff"; }}
-                              onMouseOut={e  => { if(!isHighlighted) e.currentTarget.style.background=i%2===0?"#fff":"#fafbfd"; }}>
+                              style={{ cursor:"pointer", borderBottom: i < group.items.length-1 ? "1px solid #F0F2F5" : "none",
+                                background: isHighlighted ? "#EAF1FA" : i%2===0?"#fff":"#FAFBFC", transition:"background .15s" }}
+                              onMouseOver={e => { if(!isHighlighted) e.currentTarget.style.background="#EFF1F5"; }}
+                              onMouseOut={e  => { if(!isHighlighted) e.currentTarget.style.background=i%2===0?"#fff":"#FAFBFC"; }}>
                               <td style={{ padding:"11px 18px" }}><TypeBadge type={item.type} /></td>
-                              <td style={{ padding:"11px 18px", fontSize:13, fontWeight:600, color:"#1e293b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.projName}</td>
-                              <td style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.fieldName}</td>
-                              <td style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.label !== "—" ? item.label : "—"}</td>
-                              <td onMouseEnter={e=>showTt(item.detail||item.tooltip||"",e)} onMouseMove={moveTt} onMouseLeave={hideTt} style={{ padding:"11px 18px", fontSize:13, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.detail || item.tooltip || "—"}</td>
+                              <td style={{ padding:"11px 18px", fontSize:13, fontWeight:600, color:"#0D0D0D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.projName}</td>
+                              <td style={{ padding:"11px 18px", fontSize:13, color:"#3A3A3A", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.fieldName}</td>
+                              <td style={{ padding:"11px 18px", fontSize:13, color:"#3A3A3A", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.label !== "—" ? item.label : "—"}</td>
+                              <td onMouseEnter={e=>showTt(item.detail||item.tooltip||"",e)} onMouseMove={moveTt} onMouseLeave={hideTt} style={{ padding:"11px 18px", fontSize:13, color:"#3A3A3A", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.detail || item.tooltip || "—"}</td>
                               <td style={{ padding:"11px 18px", fontSize:13, fontWeight:700, color:zone.color, whiteSpace:"nowrap" }}>{fmtVal(item)}</td>
-                              <td style={{ padding:"11px 18px", fontSize:12, color:"#94a3b8", whiteSpace:"nowrap" }}>{new Date(item.createdAt || Date.now()).toLocaleDateString("en-GB")}</td>
+                              <td style={{ padding:"11px 18px", fontSize:12, color:"#767676", whiteSpace:"nowrap" }}>{new Date(item.createdAt || Date.now()).toLocaleDateString("en-GB")}</td>
                               <td style={{ padding:"6px 10px" }}><ReminderButton item={item} /></td>
                             </tr>
                           );
@@ -7287,7 +7287,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
               const domainMgrs    = managers.filter(m => m.role === "domain");
               const tendersMgrs   = managers.filter(m => m.role === "tenders");
               const mgr = id => managers.find(m => String(m.id) === String(id));
-              const mgrSelectStyle = { padding:"4px 8px", border:"1.5px solid #e2e8f0", borderRadius:8, fontSize:12, fontFamily:"'Heebo',sans-serif", background:"#f8fafc", color:"#1e293b", outline:"none", cursor:isAdmin?"pointer":"default", maxWidth:145, direction:"rtl" };
+              const mgrSelectStyle = { padding:"4px 8px", border:"1.5px solid #E2E5EA", borderRadius:4, fontSize:12, fontFamily:"'Heebo',sans-serif", background:"#F7F8FA", color:"#0D0D0D", outline:"none", cursor:isAdmin?"pointer":"default", maxWidth:145, direction:"rtl" };
               return (
                 <div style={{ background:"#fff", borderBottom:"1px solid #E2E5EA", direction:"rtl" }}>
                   {/* שם פרויקט — שורה עליונה */}
