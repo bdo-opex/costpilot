@@ -1336,7 +1336,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
                     )}
                     {c.payType!=="אחוזים" && (
                       <button onClick={()=>toggleSubs(c.id)} title="פירוט סעיפים"
-                        style={{ background: expandedSubs[c.id]?"#e0f2fe": (c.subItems&&c.subItems.length>0)?"#fff7ed":"none",
+                        style={{ background: expandedSubs[c.id]?"#e0f2fe": (c.subItems&&c.subItems.length>0)?"#FAF2E6":"none",
                           border: `1px solid ${(c.subItems&&c.subItems.length>0)?"#f97316":"#cbd5e1"}`,
                           borderRadius:5, cursor:"pointer", fontSize:10, padding:"2px 5px",
                           color: (c.subItems&&c.subItems.length>0)?"#ea580c":"#475569", flexShrink:0 }}>
@@ -2023,7 +2023,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
                       </div>
                     </div>
                     {newEst > 0 && supp !== 0 && (
-                      <div style={{ fontSize:12, marginBottom:8, padding:"6px 10px", borderRadius:6, background: supp>0?"#f0fdf4":"#fef2f2" }}>
+                      <div style={{ fontSize:12, marginBottom:8, padding:"6px 10px", borderRadius:6, background: supp>0?"#EFF7F3":"#fef2f2" }}>
                         הגדלה שתיווצר אוטומטית: <strong style={{ color: supp>0?"#16a34a":"#dc2626" }}>{supp>0?"+":""}{Math.round(supp).toLocaleString("he-IL")} ₪</strong>
                       </div>
                     )}
@@ -2223,7 +2223,7 @@ function ConsultantsTab({ rows, setRows, quotesRows, budgetState, statsRows, ope
 </head><body>
 <table dir="rtl" style="border-collapse:collapse;font-family:Arial;font-size:13px;">
 <tr><td colspan="7" style="font-size:15px;font-weight:bold;padding:8px 10px;background:#dbeafe;border:1px solid #93c5fd;">${esc(projectName||"פרויקט")}</td></tr>
-<tr>${headers.map(h=>`<th style="background:#1e40af;color:#fff;font-weight:bold;padding:7px 10px;border:1px solid #1e3a8a;">${esc(h)}</th>`).join("")}</tr>
+<tr>${headers.map(h=>`<th style="background:#163356;color:#fff;font-weight:bold;padding:7px 10px;border:1px solid #0B1F3A;">${esc(h)}</th>`).join("")}</tr>
 ${dataRows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#FAFBFC"}">${row.map(v=>`<td style="border:1px solid #E2E5EA;padding:6px 10px;">${esc(v)}</td>`).join("")}</tr>`).join("")}
 </table></body></html>`;
     const b64 = btoa(unescape(encodeURIComponent(html)));
@@ -2959,7 +2959,7 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
                                         {inv.invoiceNum && inv.pmApproved && !inv.unitManagerApproved && !inv.rejected && projectMeta?.unitManagerEmail && (
                                           <button onClick={e=>{e.stopPropagation(); sendForApproval(inv.invoiceNum,"um");}}
                                             title={`שלח חשבון ${inv.invoiceNum} לאישור מנהל יחידה`}
-                                            style={{ background:"#fff7ed", color:"#c2410c", border:"1px solid #fed7aa", borderRadius:4, padding:"2px 7px", fontSize:10, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:700 }}>
+                                            style={{ background:"#FAF2E6", color:"#c2410c", border:"1px solid #F0D4B0", borderRadius:4, padding:"2px 7px", fontSize:10, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:700 }}>
                                             ✉ מנ"י
                                           </button>
                                         )}
@@ -2982,7 +2982,7 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
                             </div>
                           )}
                           {isMilestoneLocked && !sel.noClaims && (
-                            <div style={{ color: isOverpaid?"#dc2626":"#059669", fontSize:12, fontWeight:600, marginBottom:6, textAlign:"right", background: isOverpaid?"#fef2f2":"#f0fdf4", border:`1px solid ${isOverpaid?"#fecaca":"#bbf7d0"}`, borderRadius:6, padding:"6px 10px" }}>
+                            <div style={{ color: isOverpaid?"#dc2626":"#059669", fontSize:12, fontWeight:600, marginBottom:6, textAlign:"right", background: isOverpaid?"#fef2f2":"#EFF7F3", border:`1px solid ${isOverpaid?"#fecaca":"#C6E8D4"}`, borderRadius:6, padding:"6px 10px" }}>
                               {isOverpaid ? `⛔ שולם יתר — ${(paid - baseAmt).toLocaleString("he-IL")} ₪ מעבר לאומדן החדש` : "✓ אבן דרך הושלמה — לא ניתן להוסיף חשבונות"}
                             </div>
                           )}
@@ -3249,7 +3249,7 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
                 <tr style={{ background:"#fffbeb", borderTop:"1px solid #fde68a" }}>
                   <td colSpan={5} style={{ padding:"10px 14px", fontWeight:700, fontSize:13, color:"#92400e" }}>יתרת תשלום ליועץ</td>
                   <td style={{ padding:"10px 14px", fontWeight:800, fontSize:14, textAlign:"right",
-                    color: sel.noClaims ? "#94a3b8" : remaining < 0 ? "#dc2626" : "#15803d",
+                    color: sel.noClaims ? "#94a3b8" : remaining < 0 ? "#dc2626" : "#1C4532",
                     textDecoration: sel.noClaims ? "line-through" : "none" }}>
                     {fmt(remaining)}
                   </td>
@@ -3613,9 +3613,9 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
         {(() => {
           if (receivedTotal > 0) {
             const budgetPct = grandTotalPaidCalc / receivedTotal * 100;
-            const bg     = budgetPct < 75 ? "#f0fdf4" : budgetPct < 85 ? "#fffbeb" : budgetPct < 95 ? "#fff7ed" : "#fef2f2";
+            const bg     = budgetPct < 75 ? "#EFF7F3" : budgetPct < 85 ? "#fffbeb" : budgetPct < 95 ? "#FAF2E6" : "#fef2f2";
             const border = budgetPct < 75 ? "#86efac" : budgetPct < 85 ? "#fde68a" : budgetPct < 95 ? "#fdba74" : "#fca5a5";
-            const clr    = budgetPct < 75 ? "#15803d" : budgetPct < 85 ? "#a16207" : budgetPct < 95 ? "#c2410c" : "#dc2626";
+            const clr    = budgetPct < 75 ? "#1C4532" : budgetPct < 85 ? "#a16207" : budgetPct < 95 ? "#c2410c" : "#dc2626";
             return (
               <div style={{ background:bg, border:"2px solid "+border, borderRadius:12, padding:"16px 20px", minWidth:190, display:"flex", flexDirection:"column", gap:8, direction:"rtl" }}>
                 <div style={{ fontSize:11, fontWeight:700, color:"#64748b", whiteSpace:"nowrap" }}>ניצול תקציבי</div>
@@ -3636,9 +3636,9 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
           const boqVal  = Number(String(boqMeta?.boq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
           const utilBase = finalBoqVal > 0 ? finalBoqVal : boqVal > 0 ? boqVal : contractorEst;
           const utilPct = consultantsTotal / utilBase * 100;
-          const bg     = utilPct < 10 ? "#f0fdf4" : utilPct < 12 ? "#fff7ed" : "#fef2f2";
+          const bg     = utilPct < 10 ? "#EFF7F3" : utilPct < 12 ? "#FAF2E6" : "#fef2f2";
           const border = utilPct < 10 ? "#86efac" : utilPct < 12 ? "#fdba74" : "#fca5a5";
-          const clr    = utilPct < 10 ? "#15803d" : utilPct < 12 ? "#c2410c" : "#dc2626";
+          const clr    = utilPct < 10 ? "#1C4532" : utilPct < 12 ? "#c2410c" : "#dc2626";
           return (
             <div style={{ background:bg, border:"2px solid "+border, borderRadius:12, padding:"16px 20px", minWidth:190, display:"flex", flexDirection:"column", gap:8, direction:"rtl" }}>
               <div style={{ fontSize:11, fontWeight:700, color:"#64748b", whiteSpace:"nowrap" }}>אחוז יועצים מאומדן קבלני</div>
@@ -3792,7 +3792,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
             {allRows.length > 0 && (
               <tbody>
                 <tr style={{ borderTop:"2px solid #93c5fd" }}>
-                  <td style={{ padding:"8px 10px", fontWeight:800, color:"#1e40af", fontSize:12, textAlign:"right" }}>סה״כ יועצים</td>
+                  <td style={{ padding:"8px 10px", fontWeight:800, color:"#163356", fontSize:12, textAlign:"right" }}>סה״כ יועצים</td>
                   <td style={{ padding:"8px 10px", color:"#94a3b8", fontSize:12, textAlign:"right" }}>{allRows.length} יועצים</td>
                   <td style={{ padding:"8px 10px", fontWeight:800, color:"#1e293b", textAlign:"right" }}>{fmt(consultantsTotal)}</td>
                   <td style={{ padding:"8px 10px", fontWeight:800, color:"#1e293b", textAlign:"right" }}>{fmt(allRows.reduce((s,r)=>s+(r.paid||0),0))}</td>
@@ -3823,8 +3823,8 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                   const feeTotalPlanOnly = allFeeRows.reduce((s,r) => s+Number(r.planOnly||0),0);
                   const inputStyle = { width:"100%", fontSize:12, border:"1px solid #e2e8f0", borderRadius:6, padding:"4px 7px", fontFamily:"'Heebo',sans-serif", background:"transparent", outline:"none", textAlign:"right" };
                   return (<>
-                    <tr style={{ background:"#fff7ed", borderTop:"2px solid #fed7aa" }}>
-                      <td colSpan={9} style={{ padding:"8px 14px", fontWeight:800, color:"#9a3412", fontSize:13 }}>אגרות</td>
+                    <tr style={{ background:"#FAF2E6", borderTop:"2px solid #F0D4B0" }}>
+                      <td colSpan={9} style={{ padding:"8px 14px", fontWeight:800, color:"#5C3D10", fontSize:13 }}>אגרות</td>
                     </tr>
                     {allFeeRows.map((r, i) => {
                       const isExtra = i >= FIXED_FEES.length;
@@ -3851,11 +3851,11 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                     <tr>
                       <td colSpan={9} style={{ padding:"5px 14px" }}>
                         <button onClick={()=>upd("extraFeeRows",[...(bs.extraFeeRows||[]),{id:Date.now(),name:"",contract:"",paid:"",planOnly:"",noClaims:false,notes:""}])}
-                          style={{ background:"#fff7ed", color:"#9a3412", border:"1px solid #fed7aa", borderRadius:6, padding:"4px 10px", fontSize:11, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>+ הוסף אגרה</button>
+                          style={{ background:"#FAF2E6", color:"#5C3D10", border:"1px solid #F0D4B0", borderRadius:6, padding:"4px 10px", fontSize:11, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>+ הוסף אגרה</button>
                       </td>
                     </tr>
-                    <tr style={{ borderTop:"2px solid #fed7aa" }}>
-                      <td colSpan={2} style={{ padding:"8px 10px", fontWeight:800, color:"#9a3412", fontSize:12 }}>סה״כ אגרות</td>
+                    <tr style={{ borderTop:"2px solid #F0D4B0" }}>
+                      <td colSpan={2} style={{ padding:"8px 10px", fontWeight:800, color:"#5C3D10", fontSize:12 }}>סה״כ אגרות</td>
                       <td style={{ padding:"8px 10px", fontWeight:800, color:"#1e293b", textAlign:"right" }}>{fmt(feeTotalContract)}</td>
                       <td style={{ padding:"8px 10px", fontWeight:800, color:"#1e293b", textAlign:"right" }}>{fmt(feeTotalPaid)}</td>
                       <td style={{ padding:"8px 10px", fontWeight:800, color:"#1e293b", textAlign:"right" }}>{fmt(feeTotalRemaining)}</td>
@@ -3881,8 +3881,8 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                       const contractorPaid     = allContractorRows.reduce((s,r)=>s+Number(r.paid||0),0);
                       const contractorRem      = contractorContract - contractorPaid;
                       return (<>
-                        <tr style={{ background:"#f0fdf4", borderTop:"2px solid #bbf7d0" }}>
-                          <td colSpan={9} style={{ padding:"8px 14px", fontWeight:800, color:"#15803d", fontSize:13 }}>קבלן</td>
+                        <tr style={{ background:"#EFF7F3", borderTop:"2px solid #C6E8D4" }}>
+                          <td colSpan={9} style={{ padding:"8px 14px", fontWeight:800, color:"#1C4532", fontSize:13 }}>קבלן</td>
                         </tr>
                         {allContractorRows.map((r,i) => {
                           const rem = Number(r.contract||0) - Number(r.paid||0);
@@ -3914,11 +3914,11 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                         <tr>
                           <td colSpan={9} style={{ padding:"5px 14px" }}>
                             <button onClick={()=>upd("extraContractorRows",[...extraContractorRows,{id:Date.now(),name:"",contract:"",paid:"",notes:""}])}
-                              style={{ background:"#f0fdf4", color:"#15803d", border:"1px solid #bbf7d0", borderRadius:6, padding:"4px 10px", fontSize:11, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>+ הוסף קבלן</button>
+                              style={{ background:"#EFF7F3", color:"#1C4532", border:"1px solid #C6E8D4", borderRadius:6, padding:"4px 10px", fontSize:11, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>+ הוסף קבלן</button>
                           </td>
                         </tr>
-                        <tr style={{ borderTop:"2px solid #bbf7d0" }}>
-                          <td colSpan={2} style={{ padding:"8px 10px", fontWeight:800, color:"#15803d", fontSize:12 }}>סה״כ קבלן</td>
+                        <tr style={{ borderTop:"2px solid #C6E8D4" }}>
+                          <td colSpan={2} style={{ padding:"8px 10px", fontWeight:800, color:"#1C4532", fontSize:12 }}>סה״כ קבלן</td>
                           <td style={{ padding:"8px 10px", fontWeight:800, color:"#1e293b", textAlign:"right" }}>{fmt(contractorContract)}</td>
                           <td style={{ padding:"8px 10px", fontWeight:800, color:"#1e293b", textAlign:"right" }}>{fmt(contractorPaid)}</td>
                           <td style={{ padding:"8px 10px", fontWeight:800, color:"#1e293b", textAlign:"right" }}>{fmt(contractorRem)}</td>
@@ -3957,8 +3957,8 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                           const grandTotalPaid = allRows.reduce((s,r)=>s+(r.paid||0),0) + feeTotalPaid + contractorPaid + overheadPaid + bcmPaid + vatPaid;
                           const grandTotalRem = grandTotalContract - grandTotalPaid;
                           return (<>
-                            <tr style={{ background:"#fdf4ff", borderTop:"2px solid #e9d5ff" }}>
-                              <td colSpan={9} style={{ padding:"8px 14px", fontWeight:800, color:"#7e22ce", fontSize:13 }}>תקורות</td>
+                            <tr style={{ background:"#F0F2F5", borderTop:"2px solid #D0D5DD" }}>
+                              <td colSpan={9} style={{ padding:"8px 14px", fontWeight:800, color:"#444444", fontSize:13 }}>תקורות</td>
                             </tr>
                             {/* תקורות חברה עירונית */}
                             <tr style={{ borderBottom:"1px solid #f1f5f9" }}>
@@ -4026,8 +4026,8 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                               <td style={{ padding:"7px 10px" }}><input value={bs.vatNotes||""} onChange={e=>upd("vatNotes",e.target.value)} style={inputStyle} placeholder="הערות..." /></td>
                             </tr>
                             {/* סהכ תקורות */}
-                            <tr style={{ borderTop:"2px solid #e9d5ff" }}>
-                              <td colSpan={2} style={{ padding:"8px 10px", fontWeight:800, color:"#7e22ce", fontSize:12 }}>סה״כ תקורות</td>
+                            <tr style={{ borderTop:"2px solid #D0D5DD" }}>
+                              <td colSpan={2} style={{ padding:"8px 10px", fontWeight:800, color:"#444444", fontSize:12 }}>סה״כ תקורות</td>
                               <td style={{ padding:"8px 10px", fontWeight:800, color:"#1e293b", textAlign:"right" }}>{fmt(overheadTotalAmt)}</td>
                               <td style={{ padding:"8px 10px", fontWeight:800, color:"#1e293b", textAlign:"right" }}>{fmt(overheadPaid+bcmPaid+vatPaid)}</td>
                               <td style={{ padding:"8px 10px", fontWeight:800, color:"#1e293b", textAlign:"right" }}>{fmt(overheadRem+bcmRem+vatRem)}</td>
@@ -4210,11 +4210,11 @@ function TenderTab({ rows, setRows, quotesRows, budgetState, statsRows, openingD
                   </table>
                 </div>
                 {/* Card 2: אומדן מעודכן לפי מכרז */}
-                <div style={{ background:"#fff", borderRadius:10, border:"1px solid #bbf7d0", overflow:"hidden", boxShadow:"0 1px 4px #0001", display:"inline-block" }}>
-                  <div style={{ padding:"9px 14px", background:"#dcfce7", color:"#166534", fontWeight:700, fontSize:13, borderBottom:"1px solid #bbf7d0", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div style={{ background:"#fff", borderRadius:10, border:"1px solid #C6E8D4", overflow:"hidden", boxShadow:"0 1px 4px #0001", display:"inline-block" }}>
+                  <div style={{ padding:"9px 14px", background:"#dcfce7", color:"#0C5749", fontWeight:700, fontSize:13, borderBottom:"1px solid #C6E8D4", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                     <span>אומדן מעודכן לפי מכרז</span>
                     <button onClick={()=>setShowDoc2(!showDoc2)}
-                      style={{ fontSize:11, padding:"4px 11px", borderRadius:6, border:"1.5px solid #86efac", background:showDoc2?"#bbf7d0":"#f0fdf4", color:"#166534", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>
+                      style={{ fontSize:11, padding:"4px 11px", borderRadius:6, border:"1.5px solid #86efac", background:showDoc2?"#C6E8D4":"#EFF7F3", color:"#0C5749", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>
                       {showDoc2 ? "— הסר כתב כמויות 2" : "+ הוסף כתב כמויות 2"}
                     </button>
                   </div>
@@ -4224,11 +4224,11 @@ function TenderTab({ rows, setRows, quotesRows, budgetState, statsRows, openingD
                         <th style={{ ...thBase, background:"#f8fafc", color:"#374151", width:W0 }}>תחום</th>
                         <th style={{ ...thBase, background:"#f8fafc", color:"#374151", width:W1 }}>יועץ</th>
                         <th style={{ ...thBase, background:"#f8fafc", color:"#374151", width:WC }}>שכר טרחה %</th>
-                        <th style={{ ...thBase, background:"#f0fdf4", color:"#166534", width:WC }}>תאריך</th>
-                        <th style={{ ...thBase, background:"#f0fdf4", color:"#166534", width:WC }}>כתב כמויות</th>
-                        {showDoc2 && <th style={{ ...thBase, background:"#f0fdf4", color:"#166534", width:WC }}>כתב כמויות 2</th>}
+                        <th style={{ ...thBase, background:"#EFF7F3", color:"#0C5749", width:WC }}>תאריך</th>
+                        <th style={{ ...thBase, background:"#EFF7F3", color:"#0C5749", width:WC }}>כתב כמויות</th>
+                        {showDoc2 && <th style={{ ...thBase, background:"#EFF7F3", color:"#0C5749", width:WC }}>כתב כמויות 2</th>}
                         {["שכר טרחה מעודכן","הגדלה נדרשת","שכ\"ט BIM מעודכן","הגדלה נדרשת BIM"].map(h=>(
-                          <th key={h} style={{ ...thBase, background:"#f0fdf4", color:"#166534", width:WC }}>{h}</th>
+                          <th key={h} style={{ ...thBase, background:"#EFF7F3", color:"#0C5749", width:WC }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -4355,8 +4355,8 @@ function ContractorTab({ rows, setRows, quotesRows, tenderRows, budgetState, sta
               return (
               <div style={{ background:"#f1f5f9", padding:"10px 20px 20px", display:"flex", flexDirection:"column", gap:24, alignItems:"flex-start" }}>
               {/* Card 1: אומדן מעודכן לפי מכרז */}
-              <div style={{ background:"#fff", borderRadius:10, border:"1px solid #bbf7d0", overflow:"hidden", boxShadow:"0 1px 4px #0001", display:"inline-block" }}>
-                <div style={{ padding:"9px 14px", background:"#dcfce7", color:"#166534", fontWeight:700, fontSize:13, borderBottom:"1px solid #bbf7d0" }}>אומדן מעודכן לפי מכרז</div>
+              <div style={{ background:"#fff", borderRadius:10, border:"1px solid #C6E8D4", overflow:"hidden", boxShadow:"0 1px 4px #0001", display:"inline-block" }}>
+                <div style={{ padding:"9px 14px", background:"#dcfce7", color:"#0C5749", fontWeight:700, fontSize:13, borderBottom:"1px solid #C6E8D4" }}>אומדן מעודכן לפי מכרז</div>
                 <table style={{ width:t1W, borderCollapse:"collapse", direction:"rtl", fontSize:12, tableLayout:"fixed" }}>
                   <colgroup>
                     <col style={{ width:W0 }} /><col style={{ width:W1 }} /><col style={{ width:WC }} />
@@ -4368,7 +4368,7 @@ function ContractorTab({ rows, setRows, quotesRows, tenderRows, budgetState, sta
                       <th style={{ ...thBase, background:"#f8fafc", color:"#374151" }}>יועץ</th>
                       <th style={{ ...thBase, background:"#f8fafc", color:"#374151" }}>שכר טרחה %</th>
                       {["תאריך","כתב כמויות","שכר טרחה מעודכן","שכ\"ט BIM מעודכן"].map(h=>(
-                        <th key={h} style={{ ...thBase, background:"#f0fdf4", color:"#166534" }}>{h}</th>
+                        <th key={h} style={{ ...thBase, background:"#EFF7F3", color:"#0C5749" }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -4634,7 +4634,7 @@ function SuppliersPage({ suppliers, setSuppliers, professions }) {
           <div style={{ fontSize:13, color:"#64748b", marginTop:2 }}>ניהול כללי של כל הספקים במערכת</div>
         </div>
         <div style={{ display:"flex", gap:10 }}>
-          <label style={{ display:"flex", alignItems:"center", gap:7, padding:"9px 16px", background:"#f8fafc", color:"#374151", border:"1.5px solid #bbf7d0", borderRadius:9, fontSize:13, fontWeight:700, fontFamily:"'Heebo',sans-serif", cursor:"pointer" }}>
+          <label style={{ display:"flex", alignItems:"center", gap:7, padding:"9px 16px", background:"#f8fafc", color:"#374151", border:"1.5px solid #C6E8D4", borderRadius:9, fontSize:13, fontWeight:700, fontFamily:"'Heebo',sans-serif", cursor:"pointer" }}>
             ייבוא מאקסל ↑
             <input type="file" accept=".csv,.xlsx,.xls" style={{ display:"none" }} onChange={e => {
               const file = e.target.files?.[0]; if (!file) return;
@@ -5223,7 +5223,7 @@ function MilestonesPage({ companies, milestones, setMilestones, professions }) {
                 ))}
               </tbody>
               <tfoot>
-                <tr style={{ background: totalPct===100?"#f0fdf4":"#fff7ed", borderTop:"2px solid "+(totalPct===100?"#bbf7d0":"#fed7aa") }}>
+                <tr style={{ background: totalPct===100?"#EFF7F3":"#FAF2E6", borderTop:"2px solid "+(totalPct===100?"#C6E8D4":"#F0D4B0") }}>
                   <td colSpan={2} style={{ padding:"10px 16px", fontWeight:700, color: totalPct===100?"#16a34a":"#d97706" }}>סה״כ</td>
                   <td style={{ padding:"10px 16px", textAlign:"right", fontWeight:800, fontSize:15, color: totalPct===100?"#16a34a":"#d97706" }}>{totalPct.toFixed(1)}%</td>
                   <td colSpan={2} />
@@ -5562,7 +5562,7 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
 </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml>
 </head><body>
 <table dir="rtl" style="border-collapse:collapse;font-family:Arial;font-size:12px;">
-<tr>${headers.map(h=>`<th style="background:#1e40af;color:#fff;font-weight:bold;padding:7px 10px;border:1px solid #1e3a8a;white-space:nowrap;">${esc(h)}</th>`).join("")}</tr>
+<tr>${headers.map(h=>`<th style="background:#163356;color:#fff;font-weight:bold;padding:7px 10px;border:1px solid #0B1F3A;white-space:nowrap;">${esc(h)}</th>`).join("")}</tr>
 ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#f8fafc"}">${row.cells.map((v,ci)=>{
   const bg = ci===7 ? row.utilBg : ci===8 ? row.utilBg2 : "";
   const style = `border:1px solid #e2e8f0;padding:6px 10px;${bg?"background:"+bg+";":""}`;
@@ -5587,7 +5587,7 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#f8fafc"}">${row.ce
         </div>
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
           <button onClick={exportToExcel}
-            style={{ fontSize:12, padding:"6px 14px", borderRadius:7, border:"1.5px solid #86efac", background:"#f0fdf4", color:"#16a34a", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+            style={{ fontSize:12, padding:"6px 14px", borderRadius:7, border:"1.5px solid #86efac", background:"#EFF7F3", color:"#16a34a", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
             📥 ייצוא לאקסל
           </button>
           {hasAnyFilter && (
@@ -7371,7 +7371,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                   <div style={{ width:1, height:22, background:"#e2e8f0" }} />
                   {/* ייצוא */}
                   <button onClick={() => exportProjectToExcel(selectedProj)} className="allow-readonly"
-                    style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, padding:"5px 12px", fontSize:12, color:"#15803d", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, whiteSpace:"nowrap" }}>
+                    style={{ background:"#EFF7F3", border:"1px solid #C6E8D4", borderRadius:8, padding:"5px 12px", fontSize:12, color:"#1C4532", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, whiteSpace:"nowrap" }}>
                     📥 ייצוא לאקסל
                   </button>
                   {/* חזרה */}
@@ -7587,9 +7587,9 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                     </td>
                     <td style={{ padding:"8px 20px", textAlign:"right" }}>
                       <input type="number" placeholder="0"
-                        style={{ width:80, textAlign:"right", background:"#f8fafc", border:"1.5px solid #bbf7d0", borderRadius:7, padding:"5px 8px", fontSize:14, fontFamily:"'Heebo',sans-serif", outline:"none" }}
+                        style={{ width:80, textAlign:"right", background:"#f8fafc", border:"1.5px solid #C6E8D4", borderRadius:7, padding:"5px 8px", fontSize:14, fontFamily:"'Heebo',sans-serif", outline:"none" }}
                         onFocus={e => e.target.style.borderColor="#16a34a"}
-                        onBlur={e  => e.target.style.borderColor="#bbf7d0"}
+                        onBlur={e  => e.target.style.borderColor="#C6E8D4"}
                       />
                     </td>
                     <td style={{ padding:"8px 12px", textAlign:"right" }}>
