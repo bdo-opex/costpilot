@@ -305,7 +305,7 @@
                           <button key={p.id} onClick={() => toggleProject(u.uid, p.id)}
                             style={{ padding:"5px 12px", borderRadius:4, fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"'Heebo',sans-serif", border:"none",
                               background: active ? "#EAF1FA" : "#F0F2F5",
-                              color: active ? "#163356" : "#595959" }}>
+                              color: active ? "#163356" : "#444444" }}>
                             {active ? "✓ " : ""}{p.name}
                           </button>
                         );
@@ -496,16 +496,16 @@ const css = `
     --color-navy-700:#1A3D6E; --color-navy-600:#234F8C; --color-navy-500:#2E64AD;
     --color-navy-400:#5B8CC4; --color-navy-300:#92B4D8; --color-navy-200:#C4D6EC;
     --color-navy-100:#E6EEF7; --color-navy-50:#F2F6FB;
-    --color-teal-900:#083D35; --color-teal-800:#0C5749; --color-teal-700:#0E6B5B;
+    --color-teal-900:#083D35; --color-teal-800:#0C5749; --color-teal-700:#0C5749;
     --color-teal-600:#0E7C6A; --color-teal-500:#129B86; --color-teal-400:#2DB89F;
     --color-gray-950:#0D0D0D; --color-gray-900:#1A1A1A; --color-gray-700:#444444;
-    --color-gray-500:#767676; --color-gray-400:#9A9A9A; --color-gray-300:#BEBEBE;
-    --color-gray-200:#DEDEDE; --color-gray-100:#EFEFEF; --color-gray-50:#F7F8FA;
-    --bg-page:#F5F6F8; --bg-card:#FFFFFF; --bg-subtle:#EFF1F5;
+    --color-gray-500:#767676; --color-gray-400:#9A9A9A; --color-gray-300:#D0D5DD;
+    --color-gray-200:#D0D5DD; --color-gray-100:#F0F2F5; --color-gray-50:#F7F8FA;
+    --bg-page:#F5F6F8; --bg-card:#fff; --bg-subtle:#EFF1F5;
     --bg-nav:#0B1F3A; --bg-nav-hover:#112D52; --bg-nav-active:rgba(255,255,255,0.10);
     --fg-1:#0D0D0D; --fg-2:#444444; --fg-3:#767676; --fg-nav:rgba(255,255,255,0.6);
     --action-primary:#0B1F3A; --action-primary-hover:#112D52;
-    --action-accent:#0E7C6A; --action-accent-hover:#0E6B5B;
+    --action-accent:#0E7C6A; --action-accent-hover:#0C5749;
     --border-default:#E2E5EA; --border-focus:#0B1F3A;
     --shadow-1:0 1px 3px rgba(0,0,0,0.07); --shadow-2:0 4px 12px rgba(0,0,0,0.10);
     --shadow-3:0 8px 24px rgba(0,0,0,0.14);
@@ -521,8 +521,8 @@ const css = `
   .mono{font-family:var(--font-mono)!important;}
   ::-webkit-scrollbar{width:5px;height:5px;}
   ::-webkit-scrollbar-track{background:transparent;}
-  ::-webkit-scrollbar-thumb{background:#dedede;border-radius:3px;}
-  ::-webkit-scrollbar-thumb:hover{background:#bebebe;}
+  ::-webkit-scrollbar-thumb{background:#D0D5DD;border-radius:3px;}
+  ::-webkit-scrollbar-thumb:hover{background:#D0D5DD;}
   input[type=date]::-webkit-datetime-edit-fields-wrapper { direction: ltr; }
   input[type=date]::-webkit-datetime-edit-month-field,
   input[type=date]::-webkit-datetime-edit-day-field,
@@ -578,7 +578,7 @@ function Badge({ children, color }) {
     "#0E7C6A": { bg:"#EFF7F3", fg:"#1C4532", dot:"#2E7D56" },
     "#0B1F3A": { bg:"#EAF1FA", fg:"#163356", dot:"#2A5A8C" },
     "#5C3D10": { bg:"#FAF2E6", fg:"#5C3D10", dot:"#A06A20" },
-    "#9A9A9A": { bg:"#EFEFEF", fg:"#444444", dot:"#9A9A9A" },
+    "#9A9A9A": { bg:"#F0F2F5", fg:"#444444", dot:"#9A9A9A" },
     "#5C2020": { bg:"#F8EDED", fg:"#5C2020", dot:"#A03030" },
   };
   const v = variants[color] || { bg:(color||"#9A9A9A")+"1a", fg:color||"#444", dot:color||"#9A9A9A" };
@@ -1168,7 +1168,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
         </div>`;
       document.body.appendChild(div);
       try {
-        const canvas = await window.html2canvas(div, { scale:2, useCORS:true, backgroundColor:"#ffffff", logging:false });
+        const canvas = await window.html2canvas(div, { scale:2, useCORS:true, backgroundColor:"#fff", logging:false });
         document.body.removeChild(div);
         if (pi > 0) pdf.addPage();
         const imgData = canvas.toDataURL("image/png");
@@ -1336,10 +1336,10 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
                     )}
                     {c.payType!=="אחוזים" && (
                       <button onClick={()=>toggleSubs(c.id)} title="פירוט סעיפים"
-                        style={{ background: expandedSubs[c.id]?"#e0f2fe": (c.subItems&&c.subItems.length>0)?"#FAF2E6":"none",
-                          border: `1px solid ${(c.subItems&&c.subItems.length>0)?"#f97316":"#D0D5DD"}`,
+                        style={{ background: expandedSubs[c.id]?"#EAF1FA": (c.subItems&&c.subItems.length>0)?"#FAF2E6":"none",
+                          border: `1px solid ${(c.subItems&&c.subItems.length>0)?"#5C3D10":"#D0D5DD"}`,
                           borderRadius:5, cursor:"pointer", fontSize:10, padding:"2px 5px",
-                          color: (c.subItems&&c.subItems.length>0)?"#ea580c":"#444444", flexShrink:0 }}>
+                          color: (c.subItems&&c.subItems.length>0)?"#5C3D10":"#444444", flexShrink:0 }}>
                         {expandedSubs[c.id]?"▼":"▶"}
                       </button>
                     )}
@@ -1388,7 +1388,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
               </tr>
               {expandedSubs[c.id] && (<>
                 {(c.subItems||[]).map(it => (
-                  <tr key={it.id} style={{ background:"#F7F8FA", borderBottom:"1px solid #e0f2fe" }}>
+                  <tr key={it.id} style={{ background:"#F7F8FA", borderBottom:"1px solid #EAF1FA" }}>
                     <td style={{ padding:"6px 12px" }} />
                     <td style={{ padding:"6px 12px" }}>
                       <input value={it.description} onChange={e=>updateSubItem(c.id,it.id,"description",e.target.value)}
@@ -1743,7 +1743,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
         {/* Header */}
         <div style={{ padding:"22px 26px 18px", borderBottom:"1px solid #E2E5EA", display:"flex", alignItems:"center", justifyContent:"space-between", direction:"rtl" }}>
           <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-            <div style={{ width:52, height:52, borderRadius:"50%", background:"linear-gradient(135deg,#163356,#60a5fa)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:22, fontWeight:800 }}>
+            <div style={{ width:52, height:52, borderRadius:"50%", background:"#163356", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:22, fontWeight:800 }}>
               {(consultant.name||"?")[0].toUpperCase()}
             </div>
             <div>
@@ -2316,7 +2316,7 @@ ${dataRows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#FAFBFC"}">${ro
                         {pendingInc !== 0
                           ? pendingInc < 0
                             ? <span style={{ fontWeight:600, color:"#5C2020" }}>הפחתה {fmt(Math.abs(pendingInc))}</span>
-                            : <span style={{ fontWeight:600, color:"#0891b2", direction:"ltr", display:"inline-block" }}>+{fmt(pendingInc)}</span>
+                            : <span style={{ fontWeight:600, color:"#0E7C6A", direction:"ltr", display:"inline-block" }}>+{fmt(pendingInc)}</span>
                           : dash}
                       </td>
                       <td style={{ padding:"10px 12px", color:"#3A3A3A" }}>{ct.name||dash}</td>
@@ -2894,7 +2894,7 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
                             <div style={{ overflowX:"auto", marginBottom:10 }}>
                               <table style={{ borderCollapse:"collapse", fontSize:12, width:"100%" }}>
                                 <thead>
-                                  <tr style={{ background:"#EEF0F4", borderBottom:"1px solid #E2E5EA" }}>
+                                  <tr style={{ background:"#F0F2F5", borderBottom:"1px solid #E2E5EA" }}>
                                     {["מס׳ חשבון","ת. קבלה","סכום (ש״ח)","אחוז (%)","מנהל פרויקט","מנהל יחידה","אישור מזמין","הוחזר ליועץ","נדחה","סיבה","מחק","שלח לאישור"].map(h=>(
                                       <th key={h} style={{ padding:"5px 8px", textAlign:"right", color:"#163356", fontWeight:700, fontSize:10, whiteSpace:"nowrap" }}>{h}</th>
                                     ))}
@@ -2972,12 +2972,12 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
                           )}
                           {invs.length === 0 && !isNegIncrease && <div style={{ color:"#9A9A9A", fontSize:12, marginBottom:8 }}>לא הוזנו חשבונות עדיין</div>}
                           {isNegIncrease && (
-                            <div style={{ color:"#6b7280", fontSize:12, fontWeight:600, marginBottom:6, textAlign:"right", background:"#F0F2F5", border:"1px solid #d1d5db", borderRadius:6, padding:"6px 10px" }}>
+                            <div style={{ color:"#767676", fontSize:12, fontWeight:600, marginBottom:6, textAlign:"right", background:"#F0F2F5", border:"1px solid #D0D5DD", borderRadius:6, padding:"6px 10px" }}>
                               ↩ ההקטנה כלולה בחישוב אבני הדרך — לא ניתן לחייב ישירות
                             </div>
                           )}
                           {sel.noClaims && (
-                            <div style={{ color:"#b45309", fontSize:12, fontWeight:600, marginBottom:6, textAlign:"right", background:"#FAF2E6", border:"1px solid #F0D4B0", borderRadius:6, padding:"6px 10px" }}>
+                            <div style={{ color:"#5C3D10", fontSize:12, fontWeight:600, marginBottom:6, textAlign:"right", background:"#FAF2E6", border:"1px solid #F0D4B0", borderRadius:6, padding:"6px 10px" }}>
                               התקבל העדר תביעות — לא ניתן להוסיף חשבונות ליועץ זה
                             </div>
                           )}
@@ -2987,7 +2987,7 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
                             </div>
                           )}
                           {baseAmt === 0 && paid === 0 && !isIncrease && Object.keys(milestoneAllocation).length > 0 && (
-                            <div style={{ color:"#b45309", fontSize:12, fontWeight:600, marginBottom:6, textAlign:"right", background:"#FAF2E6", border:"1px solid #F0D4B0", borderRadius:6, padding:"6px 10px" }}>
+                            <div style={{ color:"#5C3D10", fontSize:12, fontWeight:600, marginBottom:6, textAlign:"right", background:"#FAF2E6", border:"1px solid #F0D4B0", borderRadius:6, padding:"6px 10px" }}>
                               האומדן החדש כוסה במלואו — אין יתרה לאבן דרך זו
                             </div>
                           )}
@@ -3615,7 +3615,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
             const budgetPct = grandTotalPaidCalc / receivedTotal * 100;
             const bg     = budgetPct < 75 ? "#EFF7F3" : budgetPct < 85 ? "#FAF2E6" : budgetPct < 95 ? "#FAF2E6" : "#F8EDED";
             const border = budgetPct < 75 ? "#C6E8D4" : budgetPct < 85 ? "#F0D4B0" : budgetPct < 95 ? "#F0D4B0" : "#F8EDED";
-            const clr    = budgetPct < 75 ? "#1C4532" : budgetPct < 85 ? "#a16207" : budgetPct < 95 ? "#5C2020" : "#5C2020";
+            const clr    = budgetPct < 75 ? "#1C4532" : budgetPct < 85 ? "#5C3D10" : budgetPct < 95 ? "#5C2020" : "#5C2020";
             return (
               <div style={{ background:bg, border:"2px solid "+border, borderRadius:12, padding:"16px 20px", minWidth:190, display:"flex", flexDirection:"column", gap:8, direction:"rtl" }}>
                 <div style={{ fontSize:11, fontWeight:700, color:"#767676", whiteSpace:"nowrap" }}>ניצול תקציבי</div>
@@ -3968,7 +3968,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                                   <span onClick={()=>upd("overheadMode", overheadMode==="fixed"?"pct":"fixed")}
                                     title="לחץ לשינוי סוג"
                                     style={{ fontSize:11, cursor:"pointer", fontWeight:700, userSelect:"none",
-                                      color: overheadMode==="fixed"?"#ea580c":"#767676",
+                                      color: overheadMode==="fixed"?"#5C3D10":"#767676",
                                       textDecoration: "underline dotted" }}>
                                     {overheadMode==="fixed"?"₪":"%"}
                                   </span>
@@ -4035,7 +4035,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                               <td colSpan={2} />
                             </tr>
                             {/* סה"כ כללי */}
-                            <tr style={{ background:"#FAF2E6", borderTop:"3px solid #fbbf24" }}>
+                            <tr style={{ background:"#FAF2E6", borderTop:"3px solid #5C3D10" }}>
                               <td colSpan={2} style={{ padding:"11px 10px", fontWeight:900, color:"#5C3D10", fontSize:14 }}>סה״כ כללי</td>
                               <td style={{ padding:"11px 10px", fontWeight:900, color:"#5C3D10", fontSize:14, textAlign:"right" }}>{fmt(grandTotalContract)}</td>
                               <td style={{ padding:"11px 10px", fontWeight:900, color:"#5C3D10", fontSize:14, textAlign:"right" }}>{fmt(grandTotalPaid)}</td>
@@ -4389,7 +4389,7 @@ function ContractorTab({ rows, setRows, quotesRows, tenderRows, budgetState, sta
               </div>
               {/* Card 2: חשבון סופי */}
               <div style={{ background:"#fff", borderRadius:10, border:"1px solid #D0D5DD", overflow:"hidden", boxShadow:"0 1px 4px #0001", display:"inline-block" }}>
-                <div style={{ padding:"9px 14px", background:"#F0F2F5", color:"#444444", fontWeight:700, fontSize:13, borderBottom:"1px solid #fef08a" }}>חשבון סופי</div>
+                <div style={{ padding:"9px 14px", background:"#F0F2F5", color:"#444444", fontWeight:700, fontSize:13, borderBottom:"1px solid #FAF2E6" }}>חשבון סופי</div>
                 <table style={{ width:t2W, borderCollapse:"collapse", direction:"rtl", fontSize:12, tableLayout:"fixed" }}>
                   <colgroup>
                     <col style={{ width:W0 }} /><col style={{ width:W1 }} /><col style={{ width:WC }} />
@@ -4532,7 +4532,7 @@ function WorkScopesPage({ workScopes, setWorkScopes, suppliers, companies }) {
                   borderColor: active ? "#0B1F3A" : "#E2E5EA",
                   borderBottom: active ? "1.5px solid #fff" : "1.5px solid #E2E5EA",
                   background: active ? "#fff" : "#F7F8FA",
-                  color: active ? "#0B1F3A" : "#595959",
+                  color: active ? "#0B1F3A" : "#444444",
                   fontWeight: active ? 800 : 500, fontSize:13, cursor:"pointer", marginBottom:"-1.5px" }}>
                 🏛️ {company.name}
               </button>
@@ -4702,7 +4702,7 @@ function SuppliersPage({ suppliers, setSuppliers, professions }) {
                 const isLast  = ci === cts.length - 1;
                 return (
                   <tr key={s.id+"-"+(c?c.id:0)} className="hov-row"
-                    style={{ background: c&&!isFirst?"#f8fcff":bg, borderBottom: isLast?"1px solid #E2E5EA":"1px solid #f0f6ff" }}>
+                    style={{ background: c&&!isFirst?"#F7F8FA":bg, borderBottom: isLast?"1px solid #E2E5EA":"1px solid #EAF1FA" }}>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A", verticalAlign:"top" }}>{isFirst ? (s.field||"—") : ""}</td>
                     <td style={{ padding:"10px 16px", fontWeight: isFirst?700:400, color: isFirst?"#0D0D0D":"#767676", verticalAlign:"top" }}>{isFirst ? s.name : ""}</td>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A" }}>{c ? (c.contact||"—") : "—"}</td>
@@ -5592,7 +5592,7 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#F7F8FA"}">${row.ce
           </button>
           {hasAnyFilter && (
             <button onClick={()=>setColFilters({})}
-              style={{ fontSize:12, padding:"6px 14px", borderRadius:7, border:"1.5px solid #F8EDED", background:"#fff1f2", color:"#5C2020", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>
+              style={{ fontSize:12, padding:"6px 14px", borderRadius:7, border:"1.5px solid #F8EDED", background:"#F8EDED", color:"#5C2020", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>
               ✕ נקה כל הסינון
             </button>
           )}
@@ -6078,8 +6078,8 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
   };
 
   const zones = [
-    { title:"ממתין להמלצה על יועצים", items:zoneA,  color:"#5C3D10", bg:"#FAF2E6", border:"#F5E6CC", icon:"⏳", emptyText:"אין פריטים ממתינים" },
-    { title:"ממתין להעברה לאישור מנהל", items:zoneIncSend, color:"#5C3D10", bg:"#FAF2E6", border:"#F5E6CC", icon:"📨", emptyText:"אין הגדלות הממתינות להעברה למנהל" },
+    { title:"ממתין להמלצה על יועצים", items:zoneA,  color:"#5C3D10", bg:"#FAF2E6", border:"#FAF2E6", icon:"⏳", emptyText:"אין פריטים ממתינים" },
+    { title:"ממתין להעברה לאישור מנהל", items:zoneIncSend, color:"#5C3D10", bg:"#FAF2E6", border:"#FAF2E6", icon:"📨", emptyText:"אין הגדלות הממתינות להעברה למנהל" },
     { title:"ממתין לאישור מנהל פרויקט",                    items:zoneB,  color:"#163356", bg:"#EAF1FA", border:"#D4E4F4", icon:"👤", emptyText:"אין חשבונות הממתינים לאישור מנהל פרויקט", groupByManager:true },
     { title:"ממתין לאישור מנהל יחידה",                     items:zoneUM, color:"#163356", bg:"#EAF1FA", border:"#D4E4F4", icon:"👔", emptyText:"אין חשבונות הממתינים לאישור מנהל יחידה" },
     { title:"הוחזר ליועץ לתיקון",                           items:zoneC,  color:"#5C2020", bg:"#F8EDED", border:"#F0D8D8", icon:"↩️", emptyText:"אין חשבונות שהוחזרו ליועץ" },
@@ -6163,7 +6163,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
                     return groups.map(group => (
                       <React.Fragment key={group.mgr}>
                         <tr>
-                          <td colSpan={COLS.length} style={{ padding:"7px 18px", background:"#EEF0F4", borderTop:"1px solid #E2E5EA", borderBottom:"1px solid #E2E5EA", fontSize:12, fontWeight:700, color:"#163356" }}>
+                          <td colSpan={COLS.length} style={{ padding:"7px 18px", background:"#F0F2F5", borderTop:"1px solid #E2E5EA", borderBottom:"1px solid #E2E5EA", fontSize:12, fontWeight:700, color:"#163356" }}>
                             👤 {group.mgr}
                           </td>
                         </tr>
@@ -7261,7 +7261,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
         {selectedProj && (
           <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1 }}>
             {!isAdmin && (
-              <div style={{ background:"#FAF2E6", borderBottom:"2px solid #fcd34d", padding:"8px 20px", textAlign:"center", fontSize:13, fontWeight:600, color:"#5C3D10", fontFamily:"'Heebo',sans-serif" }}>
+              <div style={{ background:"#FAF2E6", borderBottom:"2px solid #F0D4B0", padding:"8px 20px", textAlign:"center", fontSize:13, fontWeight:600, color:"#5C3D10", fontFamily:"'Heebo',sans-serif" }}>
                 👁 מצב צפייה בלבד — אין הרשאת עריכה
               </div>
             )}
@@ -7695,7 +7695,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
               </button>
             </div>
             <button onClick={doBackup}
-              style={{ width:"100%", padding:"11px", borderRadius:9, border:"none", background:"linear-gradient(135deg,#0B1F3A,#1d4ed8)", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>
+              style={{ width:"100%", padding:"11px", borderRadius:4, border:"none", background:"#0B1F3A", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>
               {backupDirName ? "שמור גיבוי לתיקייה" : "שמור גיבוי (ידני)"}
             </button>
           </div>
@@ -7725,7 +7725,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                 document.execCommand("copy");
                 notify("✅ הועתק! כעת הדביקי בפנקס רשימות ושמרי");
               }}
-              style={{ background:"linear-gradient(135deg,#163356,#0B1F3A)", color:"#fff", border:"none", borderRadius:9, padding:"9px 20px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>
+              style={{ background:"#0B1F3A", color:"#fff", border:"none", borderRadius:9, padding:"9px 20px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>
               📋 העתק הכל
             </button>
             <textarea
