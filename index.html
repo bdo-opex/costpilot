@@ -862,7 +862,7 @@ function ApprovalEmailModal({ toEmail, toName, subject, body, htmlBody, onSent, 
         </div>
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
           <button onClick={onCancel}
-            style={{ padding:"8px 18px", borderRadius:8, border:"1.5px solid #E2E5EA", background:"#F7F8FA", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"'Heebo',sans-serif", color:"#444444" }}>
+            style={{ padding:"8px 18px", borderRadius:4, border:"1.5px solid #E2E5EA", background:"#F7F8FA", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"'Heebo',sans-serif", color:"#444444" }}>
             לא עכשיו
           </button>
           <button onClick={() => { openOutlookEmail(toEmail, subject, body, htmlBody || null); onSent(); }}
@@ -878,7 +878,7 @@ function ApprovalEmailModal({ toEmail, toName, subject, body, htmlBody, onSent, 
   );
 }
 
-function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, openingData, statsRows, projectName, projectNumber, companyName, companyId, workScopes, projectMeta }) {
+function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, openingData, statsRows, projectName, projectNumber, companyName, companyId, workScopes, projectMeta, consultantUtilPct }) {
   const [newFieldName, setNewFieldName] = useState("");
   const [showNewField, setShowNewField] = useState(false);
   const [search, setSearch] = useState("");
@@ -921,7 +921,10 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
       );
       if (!newlyRec) continue;
       const subject = `המלצה על יועץ — ${field.fieldName} — ${projectMeta.name}`;
-      const body = `שלום ${projectMeta.tendersManager || ""},\n\nיועץ "${newlyRec.name}" נבחר כמומלץ עבור תחום "${field.fieldName}" בפרויקט "${projectMeta.name}".\n\nיש להעביר את ההמלצה למזמין לאישור.\n\nבברכה`;
+      const _utilWarn1 = (consultantUtilPct||0) >= 10
+        ? `\n\n${(consultantUtilPct||0) >= 12 ? "⚠️" : "ℹ️"} אחוז ניצול יועצים: ${(consultantUtilPct||0).toFixed(1)}% — ${(consultantUtilPct||0) >= 12 ? "חריגה מעל 12%" : "קרוב לתקרה (12%)"}`
+        : "";
+      const body = `שלום ${projectMeta.tendersManager || ""},\n\nיועץ "${newlyRec.name}" נבחר כמומלץ עבור תחום "${field.fieldName}" בפרויקט "${projectMeta.name}".\n\nיש להעביר את ההמלצה למזמין לאישור.${_utilWarn1}\n\nבברכה`;
       const cEst = Number(String((openingData||{}).contractorEst||"").replace(/,/g,"")) || Number((budgetState||{}).contractorEst||0);
       const devPct = (statsRows||[]).filter(r=>(r.field||"").includes("פיתוח")||(r.field||"").includes("נוף")).reduce((s,r)=>s+Number(r.pct||0),0);
       const archBase = cEst - cEst * devPct / 100;
@@ -944,7 +947,7 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
         `שלום ${projectMeta.tendersManager || ""},\n\nיועץ "${newlyRec.name}" נבחר כמומלץ עבור תחום "${field.fieldName}" בפרויקט "${projectMeta.name}".\n\nלהלן כל הצעות המחיר:`,
         ["יועץ", "סוג תשלום", "ערך", "סכום ", "הערות"],
         tableRows.length > 0 ? tableRows : [["—","","","",""]],
-        "יש להעביר את ההמלצה למזמין לאישור.\n\nבברכה,\nמערכת CostPilot",
+        `יש להעביר את ההמלצה למזמין לאישור.${_utilWarn1}\n\nבברכה,\nמערכת CostPilot`,
         rowHighlights
       );
       setApprovalModal({ toEmail: projectMeta.tendersManagerEmail||"", toName: projectMeta.tendersManager, subject, body, htmlBody });
@@ -986,12 +989,15 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
             c.notes || ""
           ];
         });
-        const body = `שלום ${projectMeta.domainManager || ""},\n\nתחום "${field.fieldName}" בפרויקט "${projectMeta.name}" מוכן לבחירת יועץ מומלץ.\n\nיועצים: ${consultants.map(c=>c.name).join(", ")}\n\nאנא היכנסו למערכת ובחרו יועץ מומלץ.\n\nבברכה`;
+        const _utilWarn2 = (consultantUtilPct||0) >= 10
+          ? `\n\n${(consultantUtilPct||0) >= 12 ? "⚠️" : "ℹ️"} אחוז ניצול יועצים: ${(consultantUtilPct||0).toFixed(1)}% — ${(consultantUtilPct||0) >= 12 ? "חריגה מעל 12%" : "קרוב לתקרה (12%)"}`
+          : "";
+        const body = `שלום ${projectMeta.domainManager || ""},\n\nתחום "${field.fieldName}" בפרויקט "${projectMeta.name}" מוכן לבחירת יועץ מומלץ.\n\nיועצים: ${consultants.map(c=>c.name).join(", ")}\n\nנא אישורכם ליועץ.${_utilWarn2}\n\nבברכה`;
         const htmlBody = buildEmailHtml(
           `שלום ${projectMeta.domainManager || ""},\n\nתחום "${field.fieldName}" בפרויקט "${projectMeta.name}" מוכן לבחירת יועץ מומלץ.\n\nלהלן הצעות היועצים:`,
           ["יועץ", "סוג תשלום", "ערך", "סכום ", "הערות"],
           tableRows.length > 0 ? tableRows : [["אין יועצים","","","",""]],
-          "אנא היכנסו למערכת ובחרו יועץ מומלץ.\n\nבברכה,\nמערכת CostPilot"
+          `נא אישורכם ליועץ.${_utilWarn2}\n\nבברכה,\nמערכת CostPilot`
         );
         setApprovalModal({ toEmail: projectMeta.domainManagerEmail || "", toName: projectMeta.domainManager, subject, body, htmlBody });
       }
@@ -1038,6 +1044,13 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
         </Card>
       )}
 
+      {(consultantUtilPct||0) >= 10 && (
+        <div style={{ background:(consultantUtilPct||0)>=12?"#F8EDED":"#FAF2E6", border:`1px solid ${(consultantUtilPct||0)>=12?"#F0B8B8":"#F0D4B0"}`, color:(consultantUtilPct||0)>=12?"#5C2020":"#5C3D10", borderRadius:4, padding:"10px 16px", fontSize:13, fontWeight:600, marginBottom:8, direction:"rtl" }}>
+          {(consultantUtilPct||0)>=12
+            ? `⚠️ אחוז ניצול יועצים: ${(consultantUtilPct||0).toFixed(1)}% — חריגה מעל 12%`
+            : `ℹ️ אחוז ניצול יועצים: ${(consultantUtilPct||0).toFixed(1)}% — קרוב לתקרה (12%)`}
+        </div>
+      )}
       {rows.filter(field => {
         if (!search.trim()) return true;
         const q = search.trim().toLowerCase();
@@ -1472,7 +1485,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
 
               <div style={{ display:"flex", gap:10, justifyContent:"flex-end", flexWrap:"wrap" }}>
                 <button onClick={() => setShowEmailModal(false)}
-                  style={{ padding:"8px 18px", borderRadius:8, border:"1.5px solid #E2E5EA", background:"#F7F8FA", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"'Heebo',sans-serif", color:"#444444" }}>
+                  style={{ padding:"8px 18px", borderRadius:4, border:"1.5px solid #E2E5EA", background:"#F7F8FA", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"'Heebo',sans-serif", color:"#444444" }}>
                   סגור
                 </button>
                 <button onClick={downloadScopeEml}
@@ -1492,7 +1505,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
 }
 
 // ── Tab: רשימת יועצים ─────────────────────────────────────────────────────────
-function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, scrollToIncreaseId, suppliers, openingData, setOpeningData, projectMeta }) {
+function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, scrollToIncreaseId, suppliers, openingData, setOpeningData, projectMeta, milestones, localMilestones, companyId, consultantUtilPct }) {
   const [inc, setInc] = useState({ reason:"", amount:"", date:"", planOnly:false });
   const [increases, setIncreases] = useState(consultant?.increases || []);
   const [approvalModal, setApprovalModal] = useState(null);
@@ -1528,9 +1541,32 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
     onSave({ ...consultant, increases: newInc, contacts, exportNotes });
   };
 
-  const baseVal   = Number(consultant.value || 0);
+  const baseVal   = Number(consultant.value || 0) || Number(consultant.contractFee || 0) || consultant._liveFee || 0;
   // Only approved increases count toward totals
   const totalInc  = increases.filter(x => x.approvedIncrease).reduce((s,x) => s + Number(x.amount||0), 0);
+
+  // BIM — 15% of planning-phase portion (milestones with planOnly=true)
+  // _liveFee = actual ₪ fee (same as initialFee in ContractorTab); baseVal for % consultants is the % not ₪
+  const baseFee = consultant._liveFee ?? baseVal;
+  const consultantField = (consultant.field || consultant.role || "").trim();
+  const effectiveMilestones = consultantField
+    ? ((localMilestones||{})[consultantField] || (milestones||{})[companyId]?.[consultantField] || [])
+    : [];
+  const planningPct = effectiveMilestones.filter(m => m.planOnly).reduce((s,m) => s + Number(m.pct||0), 0);
+  const bimAmount = Math.round(baseFee * planningPct / 100 * 0.15);
+  const bimEnabled = increases.some(x => x.isBIM);
+  const toggleBIM = (enabled) => {
+    const withoutBIM = increases.filter(x => !x.isBIM);
+    if (enabled) {
+      const bimInc = { id: "bim-" + Date.now(), reason: "הגדלה עבור BIM (15%)", amount: String(bimAmount), date: new Date().toISOString().split("T")[0], planOnly: true, isBIM: true, sentToManager: false, sentToMunicipality: false, approvedIncrease: false, createdAt: Date.now() };
+      const newInc = [...withoutBIM, bimInc];
+      setIncreases(newInc);
+      onSave({ ...consultant, increases: newInc, contacts, exportNotes });
+    } else {
+      setIncreases(withoutBIM);
+      onSave({ ...consultant, increases: withoutBIM, contacts, exportNotes });
+    }
+  };
 
   React.useEffect(() => {
     if (scrollToIncreaseId) {
@@ -1657,7 +1693,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
     const existingHist = (consultant[histKey]||[]).length > 0 ? consultant[histKey] : (openingData?.[histKey] || []);
 
     // ערך ראשוני להיסטוריה (מפתיחת הפרויקט — לא משתנה)
-    const origBase = isArchitect
+    const origBase = (isArchitect && archCalc)
       ? archCalc.archBase
       : Number(String(openingData?.contractorEst||"").replace(/,/g,""));
 
@@ -1721,7 +1757,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
         const otherLines = updatedIncreases.map(x =>
           `${x.reason||"—"} | ${fmt(x.amount)} | ${x.date ? fmtDate(x.date) : "—"} | ${incStatus(x)}`
         ).join("\n");
-        const body = `שלום ${projectMeta.unitManager||""},\n\nבקשת הגדלה עבור יועץ "${consultant.name||""}" בפרויקט "${projectMeta.name||""}" ממתינה לאישורך כמנהל יחידה.\n\nמסגרת התקשרות קיימת: ${fmt(effectiveContractFee)}\nסה"כ מאושר עד כה: ${fmt(approvedTotal)}\nההגדלה המבוקשת: ${fmt(increase.amount)}\n\nפרטי ההגדלה:\nסיבה: ${increase.reason||"—"}\nסכום: ${fmt(increase.amount)}\nתאריך: ${increase.date ? fmtDate(increase.date) : "—"}\n\nכל ההגדלות:\n${otherLines}\n\nאנא היכנסו למערכת ואשרו.\n\nבברכה`;
+        const body = `שלום ${projectMeta.unitManager||""},\n\nבקשת הגדלה עבור יועץ "${consultant.name||""}" בפרויקט "${projectMeta.name||""}" ממתינה לאישורך כמנהל יחידה.\n\nמסגרת התקשרות קיימת: ${fmt(effectiveContractFee)}\nסה"כ מאושר עד כה: ${fmt(approvedTotal)}\nההגדלה המבוקשת: ${fmt(increase.amount)}\n\nפרטי ההגדלה:\nסיבה: ${increase.reason||"—"}\nסכום: ${fmt(increase.amount)}\nתאריך: ${increase.date ? fmtDate(increase.date) : "—"}\n\nכל ההגדלות:\n${otherLines}\n\nנא אישורכם להגדלה.\n\nבברכה`;
         const tableRows = [
           ["מסגרת התקשרות קיימת", fmt(effectiveContractFee), "—", "בתוקף"],
           ...updatedIncreases.map(x => [x.reason||"—", fmt(x.amount), x.date ? fmtDate(x.date) : "—", incStatus(x)])
@@ -1731,7 +1767,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
           `שלום ${projectMeta.unitManager||""},\n\nבקשת הגדלה עבור יועץ "${consultant.name||""}" בפרויקט "${projectMeta.name||""}" ממתינה לאישורך כמנהל יחידה.\n\nסה"כ מאושר עד כה: ${fmt(approvedTotal)}\nההגדלה המבוקשת: ${fmt(increase.amount)}`,
           ["פרט", "סכום", "תאריך", "סטטוס"],
           tableRows,
-          "אנא היכנסו למערכת ואשרו את ההגדלה.\n\nבברכה,\nמערכת CostPilot",
+          "נא אישורכם להגדלה.\n\nבברכה,\nמערכת CostPilot",
           rowHighlights
         );
         setApprovalModal({ toEmail: projectMeta.unitManagerEmail, toName: projectMeta.unitManager, subject, body, htmlBody });
@@ -1762,8 +1798,16 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
               <div style={{ fontSize:13, color:"#767676", marginTop:2 }}>{consultant.role}</div>
             </div>
           </div>
-          <button onClick={onClose} style={{ background:"#F0F2F5", border:"none", borderRadius:8, width:34, height:34, fontSize:18, cursor:"pointer", color:"#767676", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+          <button onClick={onClose} style={{ background:"#F0F2F5", border:"none", borderRadius:4, width:34, height:34, fontSize:18, cursor:"pointer", color:"#767676", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
         </div>
+
+        {(consultantUtilPct||0) >= 10 && (
+          <div style={{ background:(consultantUtilPct||0)>=12?"#F8EDED":"#FAF2E6", border:`1px solid ${(consultantUtilPct||0)>=12?"#F0B8B8":"#F0D4B0"}`, color:(consultantUtilPct||0)>=12?"#5C2020":"#5C3D10", padding:"10px 26px", fontSize:13, fontWeight:600, direction:"rtl" }}>
+            {(consultantUtilPct||0)>=12
+              ? `⚠️ אחוז ניצול יועצים: ${(consultantUtilPct||0).toFixed(1)}% — חריגה מעל 12%`
+              : `ℹ️ אחוז ניצול יועצים: ${(consultantUtilPct||0).toFixed(1)}% — קרוב לתקרה (12%)`}
+          </div>
+        )}
 
         <div style={{ padding:"22px 26px", display:"flex", flexDirection:"column", gap:20, direction:"rtl" }}>
 
@@ -1827,9 +1871,9 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
             <div style={{ fontSize:12, fontWeight:700, color:"#9A9A9A", letterSpacing:1, marginBottom:10 }}>סכום התקשרות</div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
               {[
-                { label:"סכום מאושר ("+(consultant.payType||"אחוזים")+")", val: !consultant.value ? "לא הוזן" : consultant.payType==="אחוזים" ? (consultant.value+"%") : fmt(consultant.value), color:"#3A3A3A" },
+                { label:"סכום מאושר ("+(consultant.payType||"אחוזים")+")", val: consultant.payType==="אחוזים" ? (consultant.value ? consultant.value+"%" : "לא הוזן") : (baseVal ? fmt(baseVal) : "לא הוזן"), color:"#3A3A3A" },
                 { label:"סה״כ הגדלות", val: totalInc !== 0 ? fmt(totalInc) : "—", color: totalInc < 0 ? "#5C2020" : "#5C3D10" },
-                { label:"סה״כ כולל",   val: !consultant.value ? "לא הוזן" : consultant.payType==="אחוזים" ? (consultant.value+"% + "+fmt(totalInc)) : fmt(baseVal+totalInc), color:"#3A3A3A" },
+                { label:"סה״כ כולל",   val: consultant.payType==="אחוזים" ? (consultant.value ? consultant.value+"% + "+fmt(totalInc) : totalInc ? fmt(totalInc) : "לא הוזן") : (baseVal+totalInc ? fmt(baseVal+totalInc) : "לא הוזן"), color:"#3A3A3A" },
               ].map(x => (
                 <div key={x.label} style={{ background:"#F7F8FA", borderRadius:10, padding:"12px 14px", textAlign:"right" }}>
                   <div style={{ fontSize:11, color:"#9A9A9A", fontWeight:600, marginBottom:4 }}>{x.label}</div>
@@ -1967,7 +2011,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
                         <button onClick={() => delHistEntry(i)} title="מחק שורה"
                           style={{ background:"none", border:"none", color:"#5C2020", cursor:"pointer", fontSize:12, padding:"0 2px", lineHeight:1, flexShrink:0 }}>✕</button>
                         <span>{fmtDate(h.effectiveDate)}</span>
-                        <span style={{ fontWeight:700 }}>{Number(h.amount).toLocaleString("he-IL")} </span>
+                        <span style={{ fontWeight:700 }}>{Number(h.amount).toLocaleString("he-IL")}</span>
                         {h.note && <span>({h.note})</span>}
                         {i===hist.length-1 && <Badge color="#0E7C6A">נוכחי</Badge>}
                       </div>
@@ -1975,7 +2019,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
                   </div>
                 ) : (
                   <div style={{ fontSize:12, color:"#9A9A9A", marginBottom: showEstForm?10:0 }}>
-                    אומדן נוכחי: <strong style={{color:"#0D0D0D"}}>{curVal.toLocaleString("he-IL")} </strong>
+                    אומדן נוכחי: <strong style={{color:"#0D0D0D"}}>{curVal.toLocaleString("he-IL")}</strong>
                   </div>
                 );
               })()}
@@ -2035,7 +2079,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
                     </div>
                     {newEst > 0 && supp !== 0 && (
                       <div style={{ fontSize:12, marginBottom:8, padding:"6px 10px", borderRadius:4, background: supp>0?"#EFF7F3":"#F8EDED" }}>
-                        הגדלה שתיווצר אוטומטית: <strong style={{ color: supp>0?"#0E7C6A":"#5C2020" }}>{supp>0?"+":""}{Math.round(supp).toLocaleString("he-IL")} </strong>
+                        הגדלה שתיווצר אוטומטית: <strong style={{ color: supp>0?"#0E7C6A":"#5C2020" }}>{Math.round(supp).toLocaleString("he-IL")} </strong>
                       </div>
                     )}
                     <div style={{ display:"flex", gap:8 }}>
@@ -2130,6 +2174,20 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
             </div>
           )}
 
+          {/* הגדלה עבור BIM */}
+          <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:"#F7F8FA", border:"1.5px solid #E2E5EA", borderRadius:8, direction:"rtl" }}>
+            <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", flex:1 }}>
+              <input type="checkbox" checked={bimEnabled} onChange={e => toggleBIM(e.target.checked)}
+                style={{ width:15, height:15, cursor:"pointer", accentColor:"#0B1F3A", flexShrink:0 }} />
+              <span style={{ fontSize:13, fontWeight:700, color:"#0D0D0D" }}>הגדלה עבור BIM</span>
+            </label>
+            {bimAmount > 0 && (
+              <span style={{ fontSize:12, color:"#767676", whiteSpace:"nowrap" }}>
+                15% × {fmt(baseFee * planningPct / 100)} = <strong style={{ color:"#0D0D0D" }}>{fmt(bimAmount)}</strong>
+              </span>
+            )}
+          </div>
+
           {/* הוסף הגדלה */}
           <div>
             <div style={{ fontSize:12, fontWeight:700, color:"#9A9A9A", letterSpacing:1, marginBottom:8 }}>הוסף הגדלה</div>
@@ -2164,7 +2222,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
   );
 }
 
-function ConsultantsTab({ rows, setRows, quotesRows, budgetState, statsRows, openConsultantId, scrollToIncreaseId, suppliers, projectName, openingData, setOpeningData, projectMeta }) {
+function ConsultantsTab({ rows, setRows, quotesRows, budgetState, statsRows, openConsultantId, scrollToIncreaseId, suppliers, projectName, openingData, setOpeningData, projectMeta, milestones, localMilestones, companyId, consultantUtilPct }) {
   const [openId, setOpenId] = useState(openConsultantId || null);
   const [search, setSearch] = useState("");
 
@@ -2193,7 +2251,7 @@ function ConsultantsTab({ rows, setRows, quotesRows, budgetState, statsRows, ope
           else if (isArch && cEst) liveFee = aBase * pct;
           else if (isPMRole && cEst) liveFee = cEst * pct;
           else if (cEst) { const pp = Number((statsRows||[]).find(r=>r.field===fg.fieldName)?.pct||0)/100; liveFee = cEst * pp * pct; }
-          return { ...consultant, value: c.value, payType: c.payType || "אחוזים", _liveFee: liveFee };
+          return { ...consultant, value: c.value, payType: c.payType || "אחוזים", _liveFee: liveFee, field: fg.fieldName || "" };
         }
       }
     }
@@ -2209,6 +2267,10 @@ function ConsultantsTab({ rows, setRows, quotesRows, budgetState, statsRows, ope
   const exportToExcel = () => {
     const dataRows = [];
     rows.forEach(r => {
+      const enr = enrich(r);
+      const increases = r.increases || [];
+      const totalInc   = increases.filter(x => x.approvedIncrease).reduce((s,x) => s+Number(x.amount||0), 0);
+      const pendingInc = increases.filter(x => !x.approvedIncrease).reduce((s,x) => s+Number(x.amount||0), 0);
       const sm = (suppliers||[]).find(s => s.name === r.name);
       const cts = r.contacts?.length > 0
         ? r.contacts.map(c => ({ name: c.name||c.contact||"", phone: c.phone||"", phone2: c.phone2||"", email: c.email||"" }))
@@ -2217,14 +2279,18 @@ function ConsultantsTab({ rows, setRows, quotesRows, budgetState, statsRows, ope
           : [{ name: r.contact||"", phone: r.phone||"", phone2: r.phone2||"", email: r.email||"" }];
       cts.forEach((ct, i) => {
         dataRows.push([
-          r.role||"", r.name||"", ct.name||"",
+          r.role||"", r.name||"",
+          i===0 ? (enr._liveFee||"") : "",
+          i===0 ? (totalInc||"") : "",
+          i===0 ? (pendingInc||"") : "",
+          ct.name||"",
           ct.phone||"", ct.phone2||"", ct.email||"",
           i===0 ? (r.exportNotes||"") : "",
         ]);
       });
     });
     const esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    const headers = ["תחום","שם משרד / יועץ","שם איש קשר","טלפון","נייד","מייל","הערות"];
+    const headers = ["תחום","שם משרד / יועץ","שכ\"ט","הגדלות מאושרות","הגדלות לאישור","שם איש קשר","טלפון","נייד","מייל","הערות"];
     const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="UTF-8"/>
 <xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
@@ -2233,7 +2299,7 @@ function ConsultantsTab({ rows, setRows, quotesRows, budgetState, statsRows, ope
 </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml>
 </head><body>
 <table dir="rtl" style="border-collapse:collapse;font-family:Arial;font-size:13px;">
-<tr><td colspan="7" style="font-size:15px;font-weight:bold;padding:8px 10px;background:#EAF1FA;border:1px solid #B8CEED;">${esc(projectName||"פרויקט")}</td></tr>
+<tr><td colspan="10" style="font-size:15px;font-weight:bold;padding:8px 10px;background:#EAF1FA;border:1px solid #B8CEED;">${esc(projectName||"פרויקט")}</td></tr>
 <tr>${headers.map(h=>`<th style="background:#163356;color:#fff;font-weight:bold;padding:7px 10px;border:1px solid #0B1F3A;">${esc(h)}</th>`).join("")}</tr>
 ${dataRows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#FAFBFC"}">${row.map(v=>`<td style="border:1px solid #E2E5EA;padding:6px 10px;">${esc(v)}</td>`).join("")}</tr>`).join("")}
 </table></body></html>`;
@@ -2249,16 +2315,14 @@ ${dataRows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#FAFBFC"}">${ro
     <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
       {/* Info banner + export button */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
-        <div style={{ background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:8, padding:"12px 18px", display:"flex", alignItems:"center", gap:10, fontSize:13, color:"#3A3A3A", flex:1 }}>
-          <span style={{ fontSize:18 }}>ℹ️</span>
+        <div style={{ background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"8px 18px", display:"flex", alignItems:"center", gap:10, fontSize:13, color:"#3A3A3A", flex:1 }}>
+          <span style={{ fontSize:16, lineHeight:1 }}>ℹ️</span>
           <span>רשימה זו מתעדכנת אוטומטית — יועצים שאושרו בלשונית <strong>הצעות מחיר יועצים</strong> יופיעו כאן. לחץ על כרטיסייה לפרטים.</span>
         </div>
         {rows.length > 0 && (
           <button onClick={exportToExcel} className="allow-readonly"
-            style={{ padding:"8px 16px", background:"#0E7C6A", color:"#fff", border:"1.5px solid transparent", borderRadius:4,
-              fontFamily:"'Heebo',sans-serif", fontSize:13, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap",
-              display:"flex", alignItems:"center", gap:8 }}>
-            <span>📥</span> ייצוא לאקסל
+            style={{ background:"#EFF7F3", border:"1px solid #C6E8D4", borderRadius:4, padding:"8px 14px", fontSize:13, color:"#1C4532", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, whiteSpace:"nowrap" }}>
+            📥 ייצוא רשימת יועצים
           </button>
         )}
       </div>
@@ -2317,16 +2381,12 @@ ${dataRows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#FAFBFC"}">${ro
                       </td>
                       <td style={{ padding:"10px 12px", whiteSpace:"nowrap" }}>
                         {totalInc !== 0
-                          ? totalInc < 0
-                            ? <span style={{ fontWeight:600, color:"#5C2020", direction:"ltr", display:"inline-block" }}>-{fmt(Math.abs(totalInc))}</span>
-                            : <span style={{ fontWeight:600, color:"#5C3D10", direction:"ltr", display:"inline-block" }}>+{fmt(totalInc)}</span>
+                          ? <span style={{ fontWeight:600, color:"#0D0D0D", direction:"ltr", display:"inline-block" }}>{totalInc < 0 ? "-" : ""}{fmt(Math.abs(totalInc))}</span>
                           : dash}
                       </td>
                       <td style={{ padding:"10px 12px", whiteSpace:"nowrap" }}>
                         {pendingInc !== 0
-                          ? pendingInc < 0
-                            ? <span style={{ fontWeight:600, color:"#5C2020", direction:"ltr", display:"inline-block" }}>-{fmt(Math.abs(pendingInc))}</span>
-                            : <span style={{ fontWeight:600, color:"#0E7C6A", direction:"ltr", display:"inline-block" }}>+{fmt(pendingInc)}</span>
+                          ? <span style={{ fontWeight:600, color:"#0D0D0D", direction:"ltr", display:"inline-block" }}>{pendingInc < 0 ? "-" : ""}{fmt(Math.abs(pendingInc))}</span>
                           : dash}
                       </td>
                       <td style={{ padding:"10px 12px", color:"#3A3A3A" }}>{ct.name||dash}</td>
@@ -2353,6 +2413,10 @@ ${dataRows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#FAFBFC"}">${ro
           openingData={openingData||{}}
           setOpeningData={setOpeningData}
           projectMeta={projectMeta}
+          milestones={milestones}
+          localMilestones={localMilestones}
+          companyId={companyId}
+          consultantUtilPct={consultantUtilPct}
         />
       )}
     </div>
@@ -2601,7 +2665,8 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
       const consultantRow = (consultantsRows||[]).find(r => r.id === "q-"+c.id);
       const increases = consultantRow?.increases || c.increases || [];
       const noClaims  = !!consultantRow?.noClaims;
-      const contractFee = consultantRow?.contractFee ?? fee; // קפוא — לא משתנה לעולם
+      // כשיש בסיס ידני לאדריכל — תמיד חשב מחדש; אחרת השתמש בערך הקפוא
+      const contractFee = (isArch && archBaseManual > 0) ? fee : (consultantRow?.contractFee ?? fee);
       const approvedIncreases = increases.filter(x => x.approvedIncrease);
       const totalInc  = approvedIncreases.reduce((s,x)=>s+Number(x.amount||0),0);
       consultantFees.push({
@@ -2687,10 +2752,11 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
     const validKeys = new Set([
       ...fieldMilestones.map(m => "m-"+m.id),
       ...(sel.increases||[]).map(x => "i-"+x.id),
+      ...selSubItems.map(it => "s-"+it.id),
     ]);
     const invRows = rows.filter(r =>
-      invMatchesField(r, sel.field||"", sel.name||"") &&
-      validKeys.has(r.rowKey) &&
+      r.consultantName === (sel.name||"") &&
+      (!r.fieldName || r.fieldName === (sel.field||"")) &&
       String(r.invoiceNum||"").trim() === String(invNum).trim()
     );
     if (invRows.length === 0) return;
@@ -2698,8 +2764,9 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
     const rowKeySet = new Set(invRows.map(r => r.rowKey));
     const subject = `CostPilot — חשבון מס׳ ${invNum} ממתין לאישורך — ${projectMeta.name}`;
     const headers = ["אבן דרך", "% מחוזה", "% מצטבר שולם", "% מבוקש בחשבון", "נדרש ", "שולם ", "יתרה ", "סכום חשבון "];
-    const outro = "אנא היכנסו למערכת ואשרו את החשבונית.\n\nבברכה,\nמערכת CostPilot";
-    const msRows = fieldMilestones.map(m => {
+    const outro = "נא אישורכם לחשבון.\n\nבברכה,\nמערכת CostPilot";
+    // שורות אבני דרך רגילות
+    const msRows = useSubItems ? [] : fieldMilestones.map(m => {
       const key = "m-"+m.id;
       const baseFromAlloc = milestoneAllocation[key]?.baseAmt;
       const required = baseFromAlloc ?? (sel.contractFee || sel.fee || 0) * Number(m.pct||0) / 100;
@@ -2718,6 +2785,25 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
         isCurrent ? fmt(Number(thisRow?.amount||0)) : "—",
       ];
     });
+    // שורות פריטי משנה (sub-items)
+    const siRows = useSubItems ? selSubItems.map(it => {
+      const key = "s-"+it.id;
+      const required = Number(it.amount||0);
+      const paid = rowTotal(key);
+      const isCurrent = rowKeySet.has(key);
+      const paidPct = required > 0 ? (paid/required*100).toFixed(1) : "0";
+      const thisRow = invRows.find(r => r.rowKey === key);
+      return [
+        it.description || "—",
+        "100%",
+        `${paidPct}%`,
+        "—",
+        fmt(required),
+        fmt(paid),
+        fmt(Math.max(0, required - paid)),
+        isCurrent ? fmt(Number(thisRow?.amount||0)) : "—",
+      ];
+    }) : [];
     // שורות הגדלות (חיוביות בלבד — שליליות מחושבות באבני הדרך)
     const incRows = (sel.increases||[]).filter(x => Number(x.amount||0) > 0).map(x => {
       const key = "i-"+x.id;
@@ -2738,36 +2824,52 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
       ];
     });
     const rowHighlights = [
-      ...fieldMilestones.map(m => rowKeySet.has("m-"+m.id)),
+      ...(useSubItems ? selSubItems.map(it => rowKeySet.has("s-"+it.id)) : fieldMilestones.map(m => rowKeySet.has("m-"+m.id))),
       ...(sel.increases||[]).filter(x => Number(x.amount||0) > 0).map(x => rowKeySet.has("i-"+x.id)),
     ];
-    // שורת סיכום (אבני דרך + הגדלות)
+    // שורת סיכום
     const sumRequired = [
-      ...fieldMilestones.map(m => milestoneAllocation["m-"+m.id]?.baseAmt ?? (sel.contractFee||sel.fee||0)*Number(m.pct||0)/100),
+      ...(useSubItems
+        ? selSubItems.map(it => Number(it.amount||0))
+        : fieldMilestones.map(m => milestoneAllocation["m-"+m.id]?.baseAmt ?? (sel.contractFee||sel.fee||0)*Number(m.pct||0)/100)),
       ...(sel.increases||[]).filter(x => Number(x.amount||0) > 0).map(x => Number(x.amount||0)),
     ].reduce((s,v) => s+v, 0);
     const sumPaid = [
-      ...fieldMilestones.map(m => rowTotal("m-"+m.id)),
+      ...(useSubItems ? selSubItems.map(it => rowTotal("s-"+it.id)) : fieldMilestones.map(m => rowTotal("m-"+m.id))),
       ...(sel.increases||[]).filter(x => Number(x.amount||0) > 0).map(x => rowTotal("i-"+x.id)),
     ].reduce((s,v) => s+v, 0);
     const summaryRow = ["סה״כ", "", "", "", fmt(sumRequired), fmt(sumPaid), fmt(Math.max(0, sumRequired-sumPaid)), fmt(totalAmt)];
-    const allRows = [...msRows, ...incRows];
+    const allRows = [...msRows, ...siRows, ...incRows];
     const tableRows = allRows.length > 0 ? [...allRows, summaryRow] : [summaryRow];
     const tableHighlights = [...rowHighlights, false]; // שורת סיכום לא מסומנת
     const emptyRow = [["(אין אבני דרך מוגדרות)", "", "", "", "", "", "", ""]];
+    // Budget utilization warning for email
+    const _bs3 = budgetState || {};
+    const _ar3 = buildBudgetAllRows({ quotesRows, consultantsRows: consultantsRows||[], budgetState: _bs3, statsRows, accountsRows: rows||[], planOnlyMap: {}, openingData: openingData||{} });
+    const _fp3 = [...(_bs3.feeRows||[]),...(_bs3.extraFeeRows||[])].reduce((s,r)=>s+Number(r.paid||0),0);
+    const _cp3 = [{ paid: _bs3.contractorPaid||"" },...(_bs3.extraContractorRows||[])].reduce((s,r)=>s+Number(r.paid||0),0);
+    const _bp3 = _ar3.reduce((s,r)=>s+(r.paid||0),0) + _fp3 + _cp3;
+    const _oh3 = Math.round(_bp3 * Number(_bs3.overheadPct||0) / 100);
+    const _bm3 = Math.round((_bp3+_oh3) * Number(_bs3.bcmPct||0) / 100);
+    const _vt3 = Math.round((_bp3+_oh3+_bm3) * Number(_bs3.vatPct||18) / 100);
+    const _gp3 = _bp3 + _oh3 + _bm3 + _vt3;
+    const _rc3 = (_bs3.extraItems||[]).reduce((s,x)=>s+Number(x.amount||0),0);
+    const _bup3 = _rc3 > 0 ? _gp3 / _rc3 * 100 : 0;
+    const _budgetWarn = _bup3 >= 75
+      ? `\n\n${_bup3 >= 95 ? "⚠️" : "ℹ️"} ניצול תקציבי: ${_bup3.toFixed(1)}% — ${_bup3 >= 95 ? "חריגה חמורה מהתקציב" : _bup3 >= 85 ? "קרוב לתקרה התקציבית" : "מעל 75% מהתקציב נוצל"}`
+      : "";
+    const outroWithWarn = outro + _budgetWarn;
     if (stage === "pm") {
-      const pmEmail = projectMeta.status === "ביצוע" ? projectMeta.executionManagerEmail : projectMeta.planningManagerEmail;
-      const pmName  = projectMeta.status === "ביצוע" ? projectMeta.executionManager  : projectMeta.planningManager;
-      if (!pmEmail) return;
+      const pmEmail = projectMeta.status === "ביצוע" ? (projectMeta.executionManagerEmail||"") : (projectMeta.planningManagerEmail||"");
+      const pmName  = projectMeta.status === "ביצוע" ? (projectMeta.executionManager||"")  : (projectMeta.planningManager||"");
       const intro = `פרויקט: ${projectMeta.name}\nיועץ: ${sel.name}\nחשבון מס׳: ${invNum}\nסה״כ סכום: ${fmt(totalAmt)}`;
-      const body = `שלום ${pmName || ""},\n\nחשבונית ממתינה לאישורך כמנהל הפרויקט.\n\n${intro}\n\nאנא היכנסו למערכת ואשרו.\n\nבברכה`;
-      const htmlBody = buildEmailHtml(`שלום ${pmName || ""},\n\nחשבונית ממתינה לאישורך כמנהל הפרויקט.\n\n${intro}`, headers, tableRows, outro, tableHighlights, "#EAF1FA");
+      const body = `שלום ${pmName || ""},\n\nחשבונית ממתינה לאישורך כמנהל הפרויקט.\n\n${intro}\n\nנא אישורכם לחשבון.${_budgetWarn}\n\nבברכה`;
+      const htmlBody = buildEmailHtml(`שלום ${pmName || ""},\n\nחשבונית ממתינה לאישורך כמנהל הפרויקט.\n\n${intro}`, headers, tableRows, outroWithWarn, tableHighlights, "#EAF1FA");
       setApprovalModal({ toEmail: pmEmail, toName: pmName, subject, body, htmlBody });
     } else if (stage === "um") {
-      if (!projectMeta.unitManagerEmail) return;
       const intro = `פרויקט: ${projectMeta.name}\nיועץ: ${sel.name}\nחשבון מס׳: ${invNum}\nסה״כ סכום: ${fmt(totalAmt)}`;
-      const body = `שלום ${projectMeta.unitManager || ""},\n\nחשבונית אושרה על ידי מנהל הפרויקט וממתינה לאישורך כמנהל יחידה.\n\n${intro}\n\nאנא היכנסו למערכת ואשרו.\n\nבברכה`;
-      const htmlBody = buildEmailHtml(`שלום ${projectMeta.unitManager || ""},\n\nחשבונית אושרה על ידי מנהל הפרויקט וממתינה לאישורך כמנהל יחידה.\n\n${intro}`, headers, tableRows, outro, tableHighlights, "#EAF1FA");
+      const body = `שלום ${projectMeta.unitManager || ""},\n\nחשבונית אושרה על ידי מנהל הפרויקט וממתינה לאישורך כמנהל יחידה.\n\n${intro}\n\nנא אישורכם לחשבון.${_budgetWarn}\n\nבברכה`;
+      const htmlBody = buildEmailHtml(`שלום ${projectMeta.unitManager || ""},\n\nחשבונית אושרה על ידי מנהל הפרויקט וממתינה לאישורך כמנהל יחידה.\n\n${intro}`, headers, tableRows, outroWithWarn, tableHighlights, "#EAF1FA");
       setApprovalModal({ toEmail: projectMeta.unitManagerEmail, toName: projectMeta.unitManager, subject, body, htmlBody });
     }
   };
@@ -2794,9 +2896,9 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
     if (negInc === 0) return {}; // אין הקטנות — אין שינוי לאבני הדרך
 
     const newFee = sel.contractFee + negInc; // contractFee פחות ההקטנות בלבד
-    const totalPaid = fieldMilestones.reduce((s,m) => s + rowTotal("m-"+m.id), 0);
-    let remaining = Math.max(0, newFee - totalPaid);
 
+    // עבור כל אבן דרך לפי הסדר — עודף תשלום מאבן אחת מקוזז מהבאה אחריה
+    let excess = 0; // עודף צבור מאבני דרך שולמו מעבר לתקרה
     const result = {};
     fieldMilestones.forEach(m => {
       const key = "m-" + m.id;
@@ -2804,17 +2906,23 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
       const maxAmt = Math.max(0, newFee * Number(m.pct||0) / 100);
 
       if (paid > maxAmt) {
-        // יתר תשלום — נעול + אזהרה; העודף נספג ב-remaining דרך totalPaid
+        // שולם יתר — נעול + אזהרה; העודף יועבר לאבן הדרך הבאה
+        excess += (paid - maxAmt);
         result[key] = { baseAmt: maxAmt, isOverpaid: true, isComplete: false };
-      } else if (paid === maxAmt) {
-        // שולם במדויק — נעול ומושלם
-        result[key] = { baseAmt: maxAmt, isOverpaid: false, isComplete: true };
       } else {
-        // פתוח — הקצה לפי הסדר מהיתרה
-        const additionalNeeded = maxAmt - paid;
-        const actualAdditional = Math.min(remaining, additionalNeeded);
-        result[key] = { baseAmt: paid + actualAdditional, isOverpaid: false, isComplete: false };
-        remaining = Math.max(0, remaining - actualAdditional);
+        const stillNeeded = maxAmt - paid; // כמה עוד נדרש לאבן דרך זו
+        if (excess >= stillNeeded) {
+          // העודף מכסה את כל היתרה — אבן הדרך הושלמה על ידי קיזוז
+          excess -= stillNeeded;
+          result[key] = { baseAmt: maxAmt, isOverpaid: false, isComplete: true };
+        } else if (excess > 0) {
+          // קיזוז חלקי — אבן דרך פתוחה לחשבונות נוספים
+          excess = 0;
+          result[key] = { baseAmt: maxAmt, isOverpaid: false, isComplete: false };
+        } else {
+          // אין קיזוז — אבן דרך פתוחה רגילה
+          result[key] = { baseAmt: maxAmt, isOverpaid: false, isComplete: false };
+        }
       }
     });
     return result;
@@ -2874,10 +2982,11 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
               return (
                 <React.Fragment key={m.id}>
                   {/* Milestone row */}
-                  <tr style={{ borderBottom: isOpen?"none":"1px solid #F0F2F5", background: isNegIncrease?"#F0F2F5": isOpen?"#EAF1FA": i%2===0?"#fff":"#FAFBFC", cursor:"pointer", opacity: isNegIncrease?0.7:1 }}
+                  <tr style={{ borderBottom: isOpen?"none":"1px solid #F0F2F5", background: isNegIncrease?"#F0F2F5": isOpen?"#EAF1FA": isOverpaid?"#FEF3F3": (paid>0&&baseAmt>0&&paid>=baseAmt)?"#EFF7F3": i%2===0?"#fff":"#FAFBFC", cursor:"pointer", opacity: isNegIncrease?0.7:1 }}
                     onClick={()=>setExpanded(e=>({...e,[key]:!e[key]}))}>
                     <td style={{ padding:"10px 10px", textAlign:"right", color:"#3A3A3A", fontWeight:700, fontSize:16 }}>{isOpen?"∧":"+"}</td>
                     <td style={{ padding:"10px 14px", fontWeight:600, color:"#0D0D0D" }}>
+                      {isMilestoneLocked && !isOverpaid && <span title="אבן דרך נעולה — כוסתה ע״י קיזוז עודף" style={{ marginLeft:6, fontSize:11, color:"#059669" }}>✓</span>}
                       {m.name||m.reason}
                     </td>
                     <td style={{ padding:"10px 14px", textAlign:"right", fontWeight:700, color:"#3A3A3A" }}>{isIncrease?100:m.pct}%</td>
@@ -2888,7 +2997,7 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
                       {isOverpaid && <span title={`שולם יתר — ${(paid - baseAmt).toLocaleString("he-IL")}  עודף`} style={{ marginRight:4, color:"#5C2020", fontSize:10, fontWeight:700 }}>⛔</span>}
                     </td>
                     <td style={{ padding:"10px 14px", textAlign:"right" }}>
-                      {m.planOnly ? <Badge color="#163356">✓</Badge> : <span style={{color:"#E2E5EA"}}>—</span>}
+                      {m.planOnly ? <Badge color="#163356" noDot>✓</Badge> : <span style={{color:"#E2E5EA"}}>—</span>}
                     </td>
                   </tr>
 
@@ -2923,8 +3032,9 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
                                       <td style={{ padding:"4px 6px" }}>
                                         <NumericCell value={inv.amount||""} baseAmt={baseAmt} mode="amount"
                                           onCommit={(amt,pct) => {
-                                            if (baseAmt > 0 && Number(amt) > baseAmt + 0.01 + 0.01) {
-                                              alert(`הסכום ${Number(amt).toLocaleString("he-IL")}  חורג מסכום האבן דרך / ההגדלה (${baseAmt.toLocaleString("he-IL")} )`);
+                                            const otherTotal = invs.filter(x=>x.id!==inv.id&&!x.rejected).reduce((s,x)=>s+Number(x.amount||0),0);
+                                            if (baseAmt > 0 && otherTotal + Number(amt) > baseAmt + 0.01) {
+                                              alert(`הסכום הכולל (${(otherTotal+Number(amt)).toLocaleString("he-IL")}) חורג מסכום האבן דרך / ההגדלה (${baseAmt.toLocaleString("he-IL")})`);
                                               return;
                                             }
                                             updateInvoice(inv.id, pct?{amount:amt,pct}:{amount:amt});
@@ -2938,8 +3048,9 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
                                               alert("האחוז לא יכול לעלות על 100%");
                                               return;
                                             }
-                                            if (baseAmt > 0 && Number(amt) > baseAmt + 0.01 + 0.01) {
-                                              alert(`הסכום המחושב ${Number(amt).toLocaleString("he-IL")}  חורג מסכום האבן דרך / ההגדלה (${baseAmt.toLocaleString("he-IL")} )`);
+                                            const otherTotal = invs.filter(x=>x.id!==inv.id&&!x.rejected).reduce((s,x)=>s+Number(x.amount||0),0);
+                                            if (baseAmt > 0 && otherTotal + Number(amt) > baseAmt + 0.01) {
+                                              alert(`הסכום המחושב הכולל (${(otherTotal+Number(amt)).toLocaleString("he-IL")}) חורג מסכום האבן דרך / ההגדלה (${baseAmt.toLocaleString("he-IL")})`);
                                               return;
                                             }
                                             updateInvoice(inv.id, amt?{pct,amount:amt}:{pct});
@@ -2966,7 +3077,7 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
                                             ✉ מנ"פ
                                           </button>
                                         )}
-                                        {inv.invoiceNum && inv.pmApproved && !inv.unitManagerApproved && !inv.rejected && projectMeta?.unitManagerEmail && (
+                                        {inv.invoiceNum && inv.pmApproved && !inv.unitManagerApproved && !inv.rejected && (
                                           <button onClick={e=>{e.stopPropagation(); sendForApproval(inv.invoiceNum,"um");}}
                                             title={`שלח חשבון ${inv.invoiceNum} לאישור מנהל יחידה`}
                                             style={{ background:"#FAF2E6", color:"#5C2020", border:"1px solid #F0D4B0", borderRadius:4, padding:"2px 7px", fontSize:10, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:700 }}>
@@ -3037,6 +3148,27 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
           onSent={() => setApprovalModal(null)}
           onCancel={() => setApprovalModal(null)} />
       )}
+
+      {/* ── Budget utilization warning ── */}
+      {(() => {
+        const _bs2 = budgetState || {};
+        const _ar2 = buildBudgetAllRows({ quotesRows, consultantsRows:consultantsRows||[], budgetState:_bs2, statsRows, accountsRows:rows||[], planOnlyMap:{}, openingData:openingData||{} });
+        const _fp2 = [...(_bs2.feeRows||[]),...(_bs2.extraFeeRows||[])].reduce((s,r)=>s+Number(r.paid||0),0);
+        const _cp2 = [{ paid:_bs2.contractorPaid||"" },...(_bs2.extraContractorRows||[])].reduce((s,r)=>s+Number(r.paid||0),0);
+        const _bp2 = _ar2.reduce((s,r)=>s+(r.paid||0),0) + _fp2 + _cp2;
+        const _oh2 = Math.round(_bp2 * Number(_bs2.overheadPct||0) / 100);
+        const _bm2 = Math.round((_bp2+_oh2) * Number(_bs2.bcmPct||0) / 100);
+        const _vt2 = Math.round((_bp2+_oh2+_bm2) * Number(_bs2.vatPct||18) / 100);
+        const _gp2 = _bp2 + _oh2 + _bm2 + _vt2;
+        const _rc2 = (_bs2.extraItems||[]).reduce((s,x)=>s+Number(x.amount||0),0);
+        const _bup = _rc2 > 0 ? _gp2 / _rc2 * 100 : 0;
+        if (_bup < 75) return null;
+        return (
+          <div style={{ background:_bup>=95?"#F8EDED":"#FAF2E6", border:`1px solid ${_bup>=95?"#F0B8B8":"#F0D4B0"}`, color:_bup>=95?"#5C2020":"#5C3D10", borderRadius:4, padding:"10px 16px", fontSize:13, fontWeight:600, direction:"rtl" }}>
+            {`ניצול תקציב שהתקבל בפרויקט - ${_bup.toFixed(1)} אחוז`}
+          </div>
+        );
+      })()}
 
       {/* ── Consultant selector ── */}
       <Card>
@@ -3491,31 +3623,71 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
 
       {/* ── Estimation table + utilization widget ── */}
       <div style={{ display:"flex", alignItems:"flex-start", gap:16, flexWrap:"wrap" }}>
-      <div style={{ fontSize:13 }}>
-        <table style={{ borderCollapse:"collapse", direction:"rtl", tableLayout:"fixed", width:"800px", background:"#fff", border:"1px solid #E2E5EA", borderRadius:8, overflow:"hidden" }}>
-          <colgroup>
-            <col style={{ width:"150px" }} />
-            <col style={{ width:"150px" }} />
-            <col style={{ width:"160px" }} />
-            <col style={{ width:"150px" }} />
-            <col style={{ width:"190px" }} />
-          </colgroup>
-          <thead>
-            <tr style={{ background:"#F7F8FA" }}>
-              <th style={{ padding:"8px 14px", fontWeight:700, fontSize:11, color:"#767676", borderBottom:"1px solid #E2E5EA", borderLeft:"1px solid #E2E5EA", textAlign:"right" }}>אומדנים</th>
-              <th style={{ padding:"8px 14px", borderBottom:"1px solid #E2E5EA", borderLeft:"1px solid #E2E5EA" }}></th>
-              <th style={{ padding:"8px 14px", fontWeight:700, fontSize:11, color:"#767676", borderBottom:"1px solid #E2E5EA", borderLeft:"1px solid #E2E5EA", textAlign:"right" }}>אישור פרויקט</th>
-              <th style={{ padding:"8px 14px", borderBottom:"1px solid #E2E5EA", borderLeft:"1px solid #E2E5EA" }}></th>
-              <th style={{ padding:"8px 14px", fontWeight:700, fontSize:11, color:"#767676", borderBottom:"1px solid #E2E5EA", textAlign:"right" }}>הערות</th>
-            </tr>
-          </thead>
+      <div style={{ display:"flex", alignItems:"flex-start", gap:24, flexWrap:"wrap", fontSize:13 }}>
+
+        {/* ── Table 1: אומדנים ── */}
+        <div style={{ border:"1px solid #E2E5EA", borderRadius:8, overflow:"hidden", background:"#fff", display:"inline-block" }}>
+          <div style={{ padding:"14px 20px", borderBottom:"1px solid #E2E5EA" }}>
+            <span style={{ fontWeight:700, color:"#0D0D0D", fontSize:15 }}>אומדנים</span>
+          </div>
+        <table style={{ borderCollapse:"collapse", direction:"rtl", tableLayout:"fixed", background:"#fff" }}>
+          <colgroup><col style={{ width:180 }} /><col style={{ width:160 }} /></colgroup>
           <tbody>
-            {/* אומדן עירוני / אישור ממונה עירוני */}
             <tr style={{ borderBottom:"1px solid #F0F2F5" }}>
               <td style={{ padding:"8px 14px", color:"#3A3A3A", textAlign:"right", borderLeft:"1px solid #E2E5EA", whiteSpace:"nowrap" }}>אומדן עירוני ראשוני</td>
-              <td style={{ padding:"5px 10px", borderLeft:"1px solid #E2E5EA" }}>
-                {(() => { const v = Number(String((openingData||{}).municipalEst||"").replace(/,/g,"").replace(/[^\d.]/g,"")); return <div style={{ textAlign:"right", background:"#F0F2F5", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", color:v?"#0D0D0D":"#9A9A9A" }}>{v?v.toLocaleString("en-US"):"לא הוזן"}</div>; })()}
+              <td style={{ padding:"5px 10px" }}>
+                {(() => { const v = Number(String((openingData||{}).municipalEst||"").replace(/,/g,"").replace(/[^\d.]/g,"")); return <div style={{ textAlign:"right", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", color:v?"#0D0D0D":"#9A9A9A" }}>{v?v.toLocaleString("en-US"):"לא הוזן"}</div>; })()}
               </td>
+            </tr>
+            <tr style={{ borderBottom:"1px solid #F0F2F5" }}>
+              <td style={{ padding:"8px 14px", color:"#3A3A3A", textAlign:"right", borderLeft:"1px solid #E2E5EA", whiteSpace:"nowrap" }}>אומדן קבלני ראשוני</td>
+              <td style={{ padding:"5px 10px" }}>
+                {(() => { const v = Number(String((openingData||{}).contractorEst||"").replace(/,/g,"").replace(/[^\d.]/g,"")); return <div style={{ textAlign:"right", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", color:v?"#0D0D0D":"#9A9A9A" }}>{v?v.toLocaleString("en-US"):"לא הוזן"}</div>; })()}
+              </td>
+            </tr>
+            {(() => {
+              const boqMeta2 = (tenderRows||[]).find(r=>r.key==="__meta__");
+              const boqVal2  = Number(String(boqMeta2?.boq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
+              return (
+                <tr style={{ borderBottom:"1px solid #F0F2F5" }}>
+                  <td style={{ padding:"8px 14px", color:"#3A3A3A", textAlign:"right", borderLeft:"1px solid #E2E5EA", whiteSpace:"nowrap" }}>כתב כמויות / מכרז</td>
+                  <td style={{ padding:"5px 10px" }}>
+                    {boqVal2 > 0
+                      ? <div style={{ textAlign:"right", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", color:"#0D0D0D" }}>{boqVal2.toLocaleString("he-IL")}</div>
+                      : <input type="text" inputMode="numeric" value={bs.tenderDocs&&!isNaN(Number(String(bs.tenderDocs).replace(/,/g,"")))?Number(String(bs.tenderDocs).replace(/,/g,"")).toLocaleString("en-US"):""} onChange={e=>upd("tenderDocs",e.target.value.replace(/,/g,""))} placeholder="0" style={{ width:"100%", textAlign:"right", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
+                    }
+                  </td>
+                </tr>
+              );
+            })()}
+            {(() => {
+              const finalMeta = (contractorRows||[]).find(r=>r.key==="__meta__");
+              const finalBoqVal = Number(String(finalMeta?.finalBoq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
+              return (
+                <tr>
+                  <td style={{ padding:"8px 14px", color:"#3A3A3A", textAlign:"right", borderLeft:"1px solid #E2E5EA", whiteSpace:"nowrap" }}>חשבון קבלן סופי</td>
+                  <td style={{ padding:"5px 10px" }}>
+                    {finalBoqVal > 0
+                      ? <div style={{ textAlign:"right", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", color:"#0D0D0D" }}>{finalBoqVal.toLocaleString("he-IL")}</div>
+                      : <NegInput value={bs.finalAccount||""} onCommit={v=>upd("finalAccount",v)} placeholder="0" style={{ width:"100%", textAlign:"right", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
+                    }
+                  </td>
+                </tr>
+              );
+            })()}
+          </tbody>
+        </table>
+        </div>
+
+        {/* ── Table 2: אישור פרויקט ── */}
+        <div style={{ border:"1px solid #E2E5EA", borderRadius:8, overflow:"hidden", background:"#fff", display:"inline-block" }}>
+          <div style={{ padding:"14px 20px", borderBottom:"1px solid #E2E5EA" }}>
+            <span style={{ fontWeight:700, color:"#0D0D0D", fontSize:15 }}>אישור פרויקט</span>
+          </div>
+        <table style={{ borderCollapse:"collapse", direction:"rtl", tableLayout:"fixed", background:"#fff" }}>
+          <colgroup><col style={{ width:180 }} /><col style={{ width:150 }} /><col style={{ width:190 }} /></colgroup>
+          <tbody>
+            <tr style={{ borderBottom:"1px solid #F0F2F5" }}>
               <td style={{ padding:"8px 14px", color:"#3A3A3A", textAlign:"right", borderLeft:"1px solid #E2E5EA", whiteSpace:"nowrap" }}>אישור ממונה עירוני</td>
               <td style={{ padding:"5px 10px", borderLeft:"1px solid #E2E5EA" }}>
                 <NegInput value={bs.approvalActual} onCommit={v=>upd("approvalActual",v)} placeholder="0" style={{ width:"100%", textAlign:"right", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
@@ -3524,12 +3696,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                 <input value={bs.approvalActualNotes||""} onChange={e=>upd("approvalActualNotes",e.target.value)} placeholder="הערה..." style={{ width:"100%", textAlign:"right", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
               </td>
             </tr>
-            {/* אומדן קבלני / קיזוז דמי הקמה */}
             <tr style={{ borderBottom:"1px solid #F0F2F5" }}>
-              <td style={{ padding:"8px 14px", color:"#3A3A3A", textAlign:"right", borderLeft:"1px solid #E2E5EA", whiteSpace:"nowrap" }}>אומדן קבלני ראשוני</td>
-              <td style={{ padding:"5px 10px", borderLeft:"1px solid #E2E5EA" }}>
-                {(() => { const v = Number(String((openingData||{}).contractorEst||"").replace(/,/g,"").replace(/[^\d.]/g,"")); return <div style={{ textAlign:"right", background:"#F0F2F5", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", color:v?"#0D0D0D":"#9A9A9A" }}>{v?v.toLocaleString("en-US"):"לא הוזן"}</div>; })()}
-              </td>
               <td style={{ padding:"8px 14px", color:"#3A3A3A", textAlign:"right", borderLeft:"1px solid #E2E5EA", whiteSpace:"nowrap" }}>קיזוז דמי הקמה</td>
               <td style={{ padding:"5px 10px", borderLeft:"1px solid #E2E5EA" }}>
                 <NegInput value={bs.setupOffset} onCommit={v=>upd("setupOffset",v)} style={{ width:"100%", textAlign:"right", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
@@ -3538,41 +3705,12 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                 <input value={bs.setupOffsetNotes||""} onChange={e=>upd("setupOffsetNotes",e.target.value)} placeholder="הערה..." style={{ width:"100%", textAlign:"right", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
               </td>
             </tr>
-            {/* כתב כמויות / סה"כ אישור */}
-            {(() => {
-              const boqMeta2 = (tenderRows||[]).find(r=>r.key==="__meta__");
-              const boqVal2  = Number(String(boqMeta2?.boq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
-              return (
             <tr style={{ borderBottom:"1px solid #F0F2F5" }}>
-              <td style={{ padding:"8px 14px", color:"#3A3A3A", textAlign:"right", borderLeft:"1px solid #E2E5EA", whiteSpace:"nowrap" }}>כתב כמויות / מכרז</td>
-              <td style={{ padding:"5px 10px", borderLeft:"1px solid #E2E5EA" }}>
-                {boqVal2 > 0
-                  ? <div style={{ padding:"4px 8px", fontSize:13, fontWeight:700, color:"#0D0D0D", textAlign:"right" }}>{boqVal2.toLocaleString("he-IL")}</div>
-                  : <input type="text" inputMode="numeric" value={bs.tenderDocs&&!isNaN(Number(String(bs.tenderDocs).replace(/,/g,"")))?Number(String(bs.tenderDocs).replace(/,/g,"")).toLocaleString("en-US"):""} onChange={e=>upd("tenderDocs",e.target.value.replace(/,/g,""))} placeholder="0" style={{ width:"100%", textAlign:"right", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
-                }
-              </td>
               <td style={{ padding:"8px 14px", fontWeight:700, color:"#0D0D0D", textAlign:"right", borderLeft:"1px solid #E2E5EA", whiteSpace:"nowrap" }}>סה״כ אישור פרויקט</td>
-              <td style={{ padding:"8px 14px", fontWeight:800, color:"#0D0D0D", textAlign:"right", borderLeft:"1px solid #E2E5EA" }}>{fmtN(approvalTotal)}</td>
-              <td style={{ padding:"5px 10px" }}>
-                <input value={bs.tenderDocsNotes||""} onChange={e=>upd("tenderDocsNotes",e.target.value)} placeholder="הערה..." style={{ width:"100%", textAlign:"right", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
-              </td>
+              <td colSpan={2} style={{ padding:"8px 14px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmtN(approvalTotal)}</td>
             </tr>
-              );
-            })()}
-            {/* חשבון קבלן סופי / תקציב שהתקבל */}
-            {(() => {
-              const finalMeta = (contractorRows||[]).find(r=>r.key==="__meta__");
-              const finalBoqVal = Number(String(finalMeta?.finalBoq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
-              return (
             <tr style={{ borderBottom:"1px solid #F0F2F5" }}>
-              <td style={{ padding:"8px 14px", color:"#3A3A3A", textAlign:"right", borderLeft:"1px solid #E2E5EA", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>חשבון קבלן סופי</td>
-              <td style={{ padding:"5px 10px", borderLeft:"1px solid #E2E5EA" }}>
-                {finalBoqVal > 0
-                  ? <div style={{ padding:"4px 8px", fontSize:13, fontWeight:700, color:"#0D0D0D", textAlign:"right" }}>{finalBoqVal.toLocaleString("he-IL")}</div>
-                  : <NegInput value={bs.finalAccount||""} onCommit={v=>upd("finalAccount",v)} placeholder="0" style={{ width:"100%", textAlign:"right", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
-                }
-              </td>
-              <td style={{ padding:"8px 14px", color:"#3A3A3A", textAlign:"right", borderLeft:"1px solid #E2E5EA", overflow:"hidden", textOverflow:"ellipsis" }}>תקציב שהתקבל</td>
+              <td style={{ padding:"8px 14px", color:"#3A3A3A", textAlign:"right", borderLeft:"1px solid #E2E5EA", whiteSpace:"nowrap" }}>תקציב שהתקבל</td>
               <td style={{ padding:"5px 10px", borderLeft:"1px solid #E2E5EA" }}>
                 <button onClick={() => upd("extraItems", [...extraItems, { id:Date.now(), desc:"", amount:"" }])}
                   style={{ width:"100%", textAlign:"center", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", fontSize:12, color:"#767676", cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>+ הוסף</button>
@@ -3581,11 +3719,8 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                 <input value={bs.finalAccountNotes||""} onChange={e=>upd("finalAccountNotes",e.target.value)} placeholder="הערה..." style={{ width:"100%", textAlign:"right", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 8px", fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
               </td>
             </tr>
-              );
-            })()}
             {extraItems.map(x => (
-              <tr key={x.id} style={{ borderBottom:"1px solid #F0F2F5", background:"#F7F8FA" }}>
-                <td colSpan={2} style={{ borderLeft:"1px solid #E2E5EA" }}></td>
+              <tr key={x.id} style={{ borderBottom:"1px solid #F0F2F5", background:"#fff" }}>
                 <td style={{ padding:"5px 8px", borderLeft:"1px solid #E2E5EA", overflow:"hidden" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                     <button onClick={()=>upd("extraItems",extraItems.filter(ei=>ei.id!==x.id))} style={{ background:"none", color:"#5C2020", border:"none", cursor:"pointer", fontSize:13, flexShrink:0 }}>✕</button>
@@ -3602,21 +3737,18 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                 </td>
               </tr>
             ))}
-            {/* סה"כ התקבל / נדרש */}
             <tr style={{ borderBottom:"1px solid #F0F2F5" }}>
-              <td colSpan={2} style={{ borderLeft:"1px solid #E2E5EA" }}></td>
               <td style={{ padding:"8px 14px", fontWeight:700, color:"#3A3A3A", textAlign:"right", borderLeft:"1px solid #E2E5EA" }}>סה״כ התקבל</td>
-              <td style={{ padding:"8px 14px", fontWeight:800, color:"#0D0D0D", textAlign:"right", borderLeft:"1px solid #E2E5EA" }}>{fmtN(receivedTotal)}</td>
-              <td />
+              <td colSpan={2} style={{ padding:"8px 14px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmtN(receivedTotal)}</td>
             </tr>
             <tr>
-              <td colSpan={2} style={{ borderLeft:"1px solid #E2E5EA" }}></td>
               <td style={{ padding:"8px 14px", fontWeight:700, color:needed>0?"#5C2020":"#3A3A3A", textAlign:"right", borderLeft:"1px solid #E2E5EA" }}>נדרש להשלמה</td>
-              <td style={{ padding:"8px 14px", fontWeight:800, fontSize:14, color:needed>0?"#5C2020":"#3A3A3A", textAlign:"right", borderLeft:"1px solid #E2E5EA" }}>{needed<0?"עודף ✓ ":""}{fmtN(Math.abs(needed))}</td>
-              <td />
+              <td colSpan={2} style={{ padding:"8px 14px", fontWeight:800, fontSize:14, color:needed>0?"#5C2020":"#3A3A3A", textAlign:"right" }}>{needed<0?"עודף ✓ ":""}{fmtN(Math.abs(needed))}</td>
             </tr>
           </tbody>
         </table>
+        </div>
+
       </div>
       <div style={{ flex:1 }} />
       <div style={{ display:"flex", flexDirection:"row", gap:12 }}>
@@ -4101,7 +4233,7 @@ function DatePickerDMY({ value, onChange, style }) {
 }
 
 // ── Tab: תוצאות מכרז ─────────────────────────────────────────────────────────
-function TenderTab({ rows, setRows, quotesRows, budgetState, statsRows, openingData, milestones, localMilestones, companyId }) {
+function TenderTab({ rows, setRows, quotesRows, consultantsRows, budgetState, statsRows, openingData, milestones, localMilestones, companyId }) {
   const [showDoc2, setShowDoc2] = useState(false);
 
   // Use ONLY opening data for initial/contract estimates (no increases)
@@ -4110,7 +4242,7 @@ function TenderTab({ rows, setRows, quotesRows, budgetState, statsRows, openingD
   const archBaseManualT = Number(String((openingData||{}).archBase||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
   const archBase = archBaseManualT > 0 ? archBaseManualT : contractorEst - contractorEst * devPct / 100;
   const fmt = n => { const v=Number(n); return (!n&&n!==0)||isNaN(v)?"—":v.toLocaleString("he-IL"); };
-  const fmtDiff = n => { const v=Number(n); if(isNaN(v)||v===0) return "—"; return (v>0?"+":"")+v.toLocaleString("he-IL"); };
+  const fmtDiff = n => { const v=Number(n); if(isNaN(v)||v===0) return "—"; return v.toLocaleString("he-IL"); };
 
   // Build rows from approved consultants (percentage-based only, contract fee without increases)
   const consultants = [];
@@ -4125,12 +4257,13 @@ function TenderTab({ rows, setRows, quotesRows, budgetState, statsRows, openingD
       else if (contractorEst) { const pp=Number((statsRows||[]).find(r=>r.field===field.fieldName)?.pct||0)/100; sectionEst=contractorEst*pp; }
       // Contract base fee only — no consultant increases
       const initialFee = sectionEst * feePct / 100;
-      // BIM = 15% of planning-phase portion (milestones with planOnly=true), only for non-arch/non-PM
+      // BIM = 15% of planning-phase portion — only for consultants that have a BIM increase
       const isArchOrPM = isArch || isPM;
-      const bimEnabled = (openingData||{}).bim !== false;
+      const consultantRow = (consultantsRows||[]).find(r => r.id === "q-"+c.id);
+      const hasBIM = !!(consultantRow?.increases||[]).some(x => x.isBIM);
       let bim = null;
       let planningPct = 0;
-      if (!isArchOrPM && bimEnabled) {
+      if (!isArchOrPM && hasBIM) {
         const effectiveMilestones = companyId
           ? ((localMilestones||{})[field.fieldName] || (milestones||{})[companyId]?.[field.fieldName] || [])
           : [];
@@ -4140,7 +4273,7 @@ function TenderTab({ rows, setRows, quotesRows, budgetState, statsRows, openingD
       }
       const key = (field.fieldName||"")+"__"+(c.name.trim());
       const saved = rows.find(r=>r.key===key)||{};
-      consultants.push({ key, field:field.fieldName||"", name:c.name.trim(), feePct, sectionEst, initialFee, bim, planningPct,
+      consultants.push({ key, field:field.fieldName||"", name:c.name.trim(), feePct, sectionEst, initialFee, bim, planningPct, hasBIM,
         doc1:saved.doc1??"", doc2:saved.doc2??"", date:saved.date??"" });
     });
   });
@@ -4190,7 +4323,7 @@ function TenderTab({ rows, setRows, quotesRows, budgetState, statsRows, openingD
               const thN = (bg,color,w=WC) => ({ ...thBase, background:bg, color, width:w });
               const thS = (color,w=WC) => ({ ...thBase, background:"#F7F8FA", color:"#3A3A3A", width:w });
               return (
-              <div style={{ background:"#F0F2F5", padding:"10px 20px 20px", display:"flex", flexDirection:"column", gap:24, alignItems:"flex-start" }}>
+              <div style={{ padding:"10px 20px 20px", display:"flex", flexDirection:"column", gap:24, alignItems:"flex-start" }}>
                 {/* Card 1: מצב קיים */}
                 <div style={{ background:"#fff", borderRadius:4, border:"1px solid #E2E5EA", overflow:"hidden", boxShadow:"0 1px 3px rgba(0,0,0,0.07)", display:"inline-block" }}>
                   <div style={{ padding:"9px 14px", background:"#EAF1FA", color:"#163356", fontWeight:700, fontSize:13, borderBottom:"1px solid #D4E4F4" }}>מצב קיים</div>
@@ -4249,7 +4382,7 @@ function TenderTab({ rows, setRows, quotesRows, budgetState, statsRows, openingD
                         const tenderBase = (showDoc2 && doc2) ? doc2 : doc1;
                         const updatedFee  = tenderBase ? tenderBase * (c.feePct||0)/100 : null;
                         const increase    = updatedFee !== null ? updatedFee - c.initialFee : null;
-                        const bimUpdated  = (updatedFee !== null && c.bim !== null) ? updatedFee * c.planningPct / 100 * 0.15 : null;
+                        const bimUpdated  = (updatedFee !== null && c.hasBIM) ? updatedFee * c.planningPct / 100 * 0.15 : null;
                         const bimIncrease = (bimUpdated !== null && c.bim !== null) ? bimUpdated - c.bim : null;
                         return (
                           <tr key={c.key} style={{ background:i%2===0?"#fff":"#F7F8FA" }}>
@@ -4282,7 +4415,7 @@ function TenderTab({ rows, setRows, quotesRows, budgetState, statsRows, openingD
 }
 
 // ── Tab: חשבון קבלן סופי ─────────────────────────────────────────────────────
-function ContractorTab({ rows, setRows, quotesRows, tenderRows, budgetState, statsRows, openingData, milestones, localMilestones, companyId }) {
+function ContractorTab({ rows, setRows, quotesRows, tenderRows, consultantsRows, budgetState, statsRows, openingData, milestones, localMilestones, companyId }) {
   const contractorEst = Number(String((openingData||{}).contractorEst||"").replace(/,/g,""));
   const devPct   = (statsRows||[]).filter(r=>(r.field||"").includes("פיתוח")||(r.field||"").includes("נוף")).reduce((s,r)=>s+Number(r.pct||0),0);
   const archBaseManualC = Number(String((openingData||{}).archBase||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
@@ -4302,9 +4435,10 @@ function ContractorTab({ rows, setRows, quotesRows, tenderRows, budgetState, sta
       else if (contractorEst) { const pp=Number((statsRows||[]).find(r=>r.field===field.fieldName)?.pct||0)/100; sectionEst=contractorEst*pp; }
       const initialFee = sectionEst * feePct / 100;
       const isArchOrPM = isArch || isPM;
-      const bimEnabled = (openingData||{}).bim !== false;
+      const consultantRow = (consultantsRows||[]).find(r => r.id === "q-"+c.id);
+      const hasBIM = !!(consultantRow?.increases||[]).some(x => x.isBIM);
       let bim = null; let planningPct = 0;
-      if (!isArchOrPM && bimEnabled) {
+      if (!isArchOrPM && hasBIM) {
         const ems = companyId ? ((localMilestones||{})[field.fieldName] || (milestones||{})[companyId]?.[field.fieldName] || []) : [];
         planningPct = ems.filter(m=>m.planOnly).reduce((s,m)=>s+Number(m.pct||0),0);
         bim = initialFee * planningPct / 100 * 0.15;
@@ -4363,7 +4497,7 @@ function ContractorTab({ rows, setRows, quotesRows, tenderRows, budgetState, sta
               const t1W = W0+W1+WC*5;
               const t2W = W0+W1+WC*7;
               return (
-              <div style={{ background:"#F0F2F5", padding:"10px 20px 20px", display:"flex", flexDirection:"column", gap:24, alignItems:"flex-start" }}>
+              <div style={{ padding:"10px 20px 20px", display:"flex", flexDirection:"column", gap:24, alignItems:"flex-start" }}>
               {/* Card 1: אומדן מעודכן לפי מכרז */}
               <div style={{ background:"#fff", borderRadius:10, border:"1px solid #C6E8D4", overflow:"hidden", boxShadow:"0 1px 4px #0001", display:"inline-block" }}>
                 <div style={{ padding:"9px 14px", background:"#EFF7F3", color:"#0C5749", fontWeight:700, fontSize:13, borderBottom:"1px solid #C6E8D4" }}>אומדן מעודכן לפי מכרז</div>
@@ -4686,7 +4820,7 @@ function SuppliersPage({ suppliers, setSuppliers, professions }) {
           <span style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", color:"#9A9A9A", fontSize:16 }}>🔍</span>
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="חיפוש חופשי — שם, מקצוע, איש קשר, טלפון, מייל..."
-            style={{ width:"100%", padding:"10px 40px 10px 12px", border:"1.5px solid #0B1F3A", borderRadius:4, fontSize:14, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
+            style={{ width:"100%", padding:"8px 40px 8px 12px", border:"1.5px solid #0B1F3A", borderRadius:4, fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box" }} />
         </div>
       </Card>
 
@@ -5602,7 +5736,7 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#F7F8FA"}">${row.ce
         </div>
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
           <button onClick={exportToExcel}
-            style={{ fontSize:12, padding:"6px 14px", borderRadius:4, border:"1.5px solid #C6E8D4", background:"#EFF7F3", color:"#0E7C6A", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+            style={{ fontSize:13, padding:"8px 14px", borderRadius:4, border:"1px solid #C6E8D4", background:"#EFF7F3", color:"#1C4532", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
             📥 ייצוא לאקסל
           </button>
           {hasAnyFilter && (
@@ -5867,7 +6001,7 @@ function CostsPage({ allData, projects, statsRows }) {
 
 // ── Global page: לוח בקרה ──────────────────────────────────────────────────
 function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailSent }) {
-  const fmt = n => n ? Number(n).toLocaleString("he-IL",{style:"currency",currency:"ILS",maximumFractionDigits:0}) : "—";
+  const fmt = n => n ? Number(n).toLocaleString("he-IL",{maximumFractionDigits:0}) : "—";
   const [highlightKey, setHighlightKey] = React.useState(null);
   const [tt, setTt] = React.useState({ visible:false, text:"", x:0, y:0 });
   const showTt = (text, e) => { if (text) setTt({ visible:true, text, x:e.clientX, y:e.clientY }); };
@@ -6070,10 +6204,10 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
     const isBlinking = daysSinceEmail !== null && daysSinceEmail >= 2;
     const buildBody = () => {
       if (item.stage === "recommendation")
-        return `שלום ${item.managerName || ""},\n\nתזכורת — תחום "${item.fieldName}" בפרויקט "${item.projName}" ממתין לבחירת יועץ מומלץ.\n\nאנא היכנסו למערכת ובחרו יועץ.\n\nבברכה`;
+        return `שלום ${item.managerName || ""},\n\nתזכורת — תחום "${item.fieldName}" בפרויקט "${item.projName}" ממתין לבחירת יועץ מומלץ.\n\nנא אישורכם ליועץ.\n\nבברכה`;
       if (item.stage === "pm")
-        return `שלום ${item.managerName || ""},\n\nתזכורת — חשבונית ${item.detail || ""} של יועץ ${item.label || ""} בפרויקט "${item.projName}" ממתינה לאישורך כמנהל פרויקט.\n\nאנא היכנסו למערכת ואשרו.\n\nבברכה`;
-      return `שלום ${item.managerName || ""},\n\nתזכורת — חשבונית ${item.detail || ""} של יועץ ${item.label || ""} בפרויקט "${item.projName}" ממתינה לאישורך כמנהל יחידה.\n\nאנא היכנסו למערכת ואשרו.\n\nבברכה`;
+        return `שלום ${item.managerName || ""},\n\nתזכורת — חשבונית ${item.detail || ""} של יועץ ${item.label || ""} בפרויקט "${item.projName}" ממתינה לאישורך כמנהל פרויקט.\n\nנא אישורכם לחשבון.\n\nבברכה`;
+      return `שלום ${item.managerName || ""},\n\nתזכורת — חשבונית ${item.detail || ""} של יועץ ${item.label || ""} בפרויקט "${item.projName}" ממתינה לאישורך כמנהל יחידה.\n\nנא אישורכם לחשבון.\n\nבברכה`;
     };
     const subjectMap = { recommendation:`CostPilot — תזכורת: בחירת יועץ — ${item.projName}`, pm:`CostPilot — תזכורת: אישור חשבונית — ${item.projName}`, um:`CostPilot — תזכורת: אישור חשבונית — ${item.projName}` };
     return (
@@ -6273,7 +6407,7 @@ function EditableName({ name, onChange, readOnly }) {
 }
 
 // ── Tab: פתיחת פרויקט ────────────────────────────────────────────────────────
-function OpeningTab({ data, setData, budgetState, setBudgetState, statsRows, projectName, projectNumber, quotesRows, suppliers, companies, companyId, onCompanyChange, managers, planningManagerId, executionManagerId, onManagerChange, isAdmin }) {
+function OpeningTab({ data, setData, budgetState, setBudgetState, statsRows, projectName, projectNumber, quotesRows, suppliers, companies, companyId, onCompanyChange, managers, planningManagerId, executionManagerId, unitManagerId, onManagerChange, isAdmin }) {
   const upd = (k, v) => setData(prev => ({ ...(prev||{}), [k]: v }));
   const updMulti = patch => setData(prev => ({ ...(prev||{}), ...patch }));
   const updBudget = (k, v) => setBudgetState(prev => ({ ...(prev||{}), [k]: v }));
@@ -6284,6 +6418,7 @@ function OpeningTab({ data, setData, budgetState, setBudgetState, statsRows, pro
 
   const planningMgrs  = (managers||[]).filter(m => m.role === "planning");
   const executionMgrs = (managers||[]).filter(m => m.role === "execution");
+  const unitMgrs      = (managers||[]).filter(m => m.role === "unit");
   const selectStyle = { width:"100%", border:"1px solid #E2E5EA", background:"#fff", textAlign:"right", direction:"rtl", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", color:"#0D0D0D", borderRadius:4, padding:"5px 8px", boxSizing:"border-box", cursor: isAdmin ? "pointer" : "default" };
 
   const rows = [
@@ -6333,6 +6468,16 @@ function OpeningTab({ data, setData, budgetState, setBudgetState, statsRows, pro
               <select value={executionManagerId||""} disabled={!isAdmin} onChange={isAdmin ? e => onManagerChange("execution", e.target.value) : undefined} style={selectStyle}>
                 <option value="">בחר מנהל ביצוע</option>
                 {executionMgrs.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </td>
+          </tr>
+          {/* מנהל יחידה */}
+          <tr style={{ background:"#F7F8FA" }}>
+            <td style={{ padding:"10px 16px", textAlign:"right", color:"#3A3A3A", fontSize:13, width:"50%", borderBottom:"1px solid #E2E5EA", borderLeft:"1px solid #E2E5EA", verticalAlign:"middle" }}>מנהל יחידה</td>
+            <td style={{ padding:"10px 16px", textAlign:"right", fontSize:13, width:"50%", borderBottom:"1px solid #E2E5EA", verticalAlign:"middle" }}>
+              <select value={unitManagerId||""} disabled={!isAdmin} onChange={isAdmin ? e => onManagerChange("unit", e.target.value) : undefined} style={selectStyle}>
+                <option value="">בחר מנהל יחידה</option>
+                {unitMgrs.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </td>
           </tr>
@@ -6540,6 +6685,11 @@ function AppInner({ currentUser, userRole, setUserRole }) {
   const [showBackupConfirm, setShowBackupConfirm] = useState(false);
   const [backupText, setBackupText] = useState("");
   const [backupDirName, setBackupDirName] = useState("");
+  const [pendingBackupData, setPendingBackupData] = useState(null);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [restoreStep, setRestoreStep] = useState("choice");
+  const restoreModeRef = React.useRef("all");
+  const restoreFileInputRef = React.useRef(null);
   const backupDirRef = React.useRef(null);
 
   // Load saved backup dir handle
@@ -6644,7 +6794,8 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     (() => {
       const _cEst  = Number(exportBState.contractorEst||0);
       const _dPct  = (statsRows||[]).filter(r=>(r.field||"").includes("פיתוח")||(r.field||"").includes("נוף")).reduce((s,r)=>s+Number(r.pct||0),0);
-      const _aBase = _cEst - _cEst * _dPct / 100;
+      const _archBaseManualExp = Number(String(o.archBase||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
+      const _aBase = _archBaseManualExp > 0 ? _archBaseManualExp : _cEst - _cEst * _dPct / 100;
       const _localMsMap = d.localMilestones || {};
       (d.quotes||[]).forEach(fg => {
         (fg.consultants||[]).forEach(c => {
@@ -6681,11 +6832,20 @@ function AppInner({ currentUser, userRole, setUserRole }) {
       accountsRows: d.accounts||[], planOnlyMap: exportPlanOnlyMap, openingData: o,
     });
     const toNum = (v) => { const n = Number(String(v||"").replace(/,/g,"").replace(/[^\d.\-]/g,"")); return isNaN(n) ? "" : n; };
+    const fmtDate = d => {
+      if (!d) return "";
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(d)) return d;
+      if (/^\d{4}-\d{2}-\d{2}/.test(d)) { const [y,m,day]=d.split(/[-T]/); return `${day}/${m}/${y}`; }
+      return d;
+    };
 
     // 1. פתיחת פרויקט
     const openingRows = [
       ["שדה","ערך"],
       ["שם פרויקט", proj.name],
+      ["חברה עירונית", company?.name||""],
+      ["מנהל תכנון", d.planningManager||""],
+      ["מנהל ביצוע", d.executionManager||""],
       ["מספר פרויקט", d.projectNumber||""],
       ["כתובת", o.address||""],
       ["מהות העבודה", o.workDescription||""],
@@ -6696,9 +6856,6 @@ function AppInner({ currentUser, userRole, setUserRole }) {
       ["אומדן קבלני", o.contractorEst||""],
       ["כמות מעליות", o.elevators||""],
       ["כמות עצים", o.trees||""],
-      ["חברה עירונית", company?.name||""],
-      ["מנהל תכנון", d.planningManager||""],
-      ["מנהל ביצוע", d.executionManager||""],
     ];
     XLSX.utils.book_append_sheet(wb, makeSimple(openingRows, [24,40]), "פתיחת פרויקט");
 
@@ -6713,7 +6870,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     XLSX.utils.book_append_sheet(wb, makeSimple(quotesRows, [16,22,14,10,10,14,10,28]), "הצעות מחיר יועצים");
 
     // 3. רשימת יועצים - פירוט פיננסי לפי יועץ
-    const consRows = [["תחום","שם יועץ","סוג תשלום","ערך/אחוז","סכום התקשרות","הגדלות מאושרות","סה כ חוזה","ששולם","יתרה לתשלום","סכום התקשרות לשלב התכנון","העדר תביעות","הערות"]];
+    const consRows = [["תחום","שם יועץ","סוג תשלום","ערך/אחוז","סכום התקשרות","הגדלות מאושרות","סה כ חוזה","סכום ששולם","יתרה לתשלום","סכום התקשרות לשלב התכנון","העדר תביעות","הערות"]];
     exportAllRows.forEach(r => {
       const isPct = r.payType === "אחוזים";
       const baseFee = r.computedFee || 0;
@@ -6757,7 +6914,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
       });
     });
     (d.consultants||[]).forEach(con => {
-      (con.increases||[]).forEach(x => { milestoneNameMap["i-"+x.id] = { name: x.reason||"הגדלה", pct: 100 }; });
+      (con.increases||[]).forEach(x => { milestoneNameMap["i-"+x.id] = { name: x.reason||"הגדלה", pct: 100, planOnly: !!x.planOnly }; });
     });
     const validConsultantsByField = new Set(exportAllRows.map(r => r.name + "::" + r.field));
     const validConsultantNames    = new Set(exportAllRows.map(r => r.name));
@@ -6770,7 +6927,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
         : validConsultantNames.has(name);
     }).forEach(r => {
       const ms = milestoneNameMap[r.rowKey] || { name:"", pct:"" };
-      accRows.push([r.consultantName||"", ms.name, ms.pct, r.invoiceNum||"", r.receiptDate||"", r.amount||"",
+      accRows.push([r.consultantName||"", ms.name, ms.pct, r.invoiceNum||"", fmtDate(r.receiptDate||""), r.amount||"",
         r.pmApproved?"כן":"לא", r.unitManagerApproved?"כן":"לא", r.toMunicipality?"כן":"לא",
         r.toConsultant?"כן":"לא", r.rejected?"כן":"לא", ms.planOnly?"כן":"לא", r.reason||""]);
     });
@@ -6785,9 +6942,19 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     bPush(["אומדן קבלני",        toNum(o.contractorEst || bs.contractorEst),"","","","","",""], "info");
     bPush(["כתב כמויות / מכרז", toNum(bs.tenderDocs),"","","","","",""], "info");
     bPush(["חשבון קבלן סופי",   toNum(bs.finalAccount),"","","","","",""], "info");
+    bPush(["","","","","","","",""], "empty");
+    bPush(["אישור פרויקט","","","","","","",""], "section");
     bPush(["אישור ממונה עירוני", toNum(bs.approvalActual),"","","","","",""], "info");
     bPush(["קיזוז דמי הקמה",    toNum(bs.setupOffset),"","","","","",""], "info");
-    (bs.extraItems||[]).forEach(x => bPush([x.desc||"תקציב שהתקבל", toNum(x.amount),"","","","","",""], "info"));
+    var xApprovalTotal = toNum(bs.approvalActual) + toNum(bs.setupOffset);
+    bPush(["סה\"כ אישור פרויקט", xApprovalTotal,"","","","","",""], "total");
+    bPush(["","","","","","","",""], "empty");
+    bPush(["תקציב שהתקבל","","","","","","",""], "section");
+    (bs.extraItems||[]).forEach(x => bPush([x.desc||"", toNum(x.amount),"","","","","",""], "info"));
+    var xReceivedTotal = (bs.extraItems||[]).reduce((s,x)=>s+(toNum(x.amount)||0),0);
+    bPush(["סה\"כ התקבל", xReceivedTotal,"","","","","",""], "total");
+    var xNeeded = xApprovalTotal - xReceivedTotal;
+    bPush([xNeeded<0?"עודף":"נדרש להשלמה", Math.abs(xNeeded),"","","","","",""], xNeeded<0?"total":"grand");
     bPush(["","","","","","","",""], "empty");
     bPush(["פירוט תקציב הפרויקט","","","","","","",""], "section");
     bPush(["שם המקצוע","שם היועץ","סכום התקשרות","סכום ששולם","יתרה לתשלום","סכום התקשרות לשלב התכנון","העדר תביעות","הערות"], "hdr");
@@ -6849,9 +7016,61 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     XLSX.utils.book_append_sheet(wb, budgetWs, "תקציב הפרויקט");
 
     // 6. תוצאות מכרז
-    const tenderRowsData = [["קבלן","הצעת מחיר","דירוג","הערות","נבחר"]];
-    (d.tender||[]).forEach(r => tenderRowsData.push([r.contractor||"", r.bid||"", r.rank||"", r.notes||"", r.selected?"כן":"לא"]));
-    XLSX.utils.book_append_sheet(wb, makeSimple(tenderRowsData, [25,15,10,30,10]), "תוצאות מכרז");
+    (() => {
+      const cEst6 = Number(String(o.contractorEst||"").replace(/,/g,"")) || 0;
+      const devPct6 = (statsRows||[]).filter(r=>(r.field||"").includes("פיתוח")||(r.field||"").includes("נוף")).reduce((s,r)=>s+Number(r.pct||0),0);
+      const archBaseM6 = Number(String(o.archBase||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
+      const archBase6 = archBaseM6 > 0 ? archBaseM6 : cEst6 - cEst6 * devPct6 / 100;
+      const tRows6 = d.tender || [];
+      const boqMeta6 = tRows6.find(r=>r.key==="__meta__") || {};
+      const card1 = [["תחום","שם יועץ","שכ\"ט %","אומדן פרק ראשוני","שכ\"ט ראשוני","שכ\"ט BIM"]];
+      const card2 = [["תחום","שם יועץ","שכ\"ט %","תאריך","כתב כמויות","שכ\"ט מעודכן","הגדלה נדרשת","שכ\"ט BIM מעודכן","הגדלה נדרשת BIM"]];
+      (d.quotes||[]).forEach(field => {
+        (field.consultants||[]).filter(c=>c.approved&&c.name?.trim()&&(c.payType||"אחוזים")==="אחוזים").forEach(c => {
+          const feePct = Number(c.value||0);
+          const isArch = ["אדריכל","אדריכלות","אדריכלים"].includes((field.fieldName||"").trim());
+          const isPM   = (field.fieldName||"").includes("מנהל פרויקט");
+          const isArchOrPM = isArch || isPM;
+          let sectionEst = 0;
+          if (isArch && cEst6)    sectionEst = archBase6;
+          else if (isPM && cEst6) sectionEst = cEst6;
+          else if (cEst6) { const pp=Number((statsRows||[]).find(r=>r.field===field.fieldName)?.pct||0)/100; sectionEst=cEst6*pp; }
+          const initialFee = sectionEst * feePct / 100;
+          const consultantRow = (d.consultants||[]).find(r=>r.id==="q-"+c.id);
+          const hasBIM = !!(consultantRow?.increases||[]).some(x=>x.isBIM);
+          let bim = null; let planningPct = 0;
+          if (!isArchOrPM && hasBIM) {
+            const ems = cId ? ((d.localMilestones||{})[field.fieldName] || (milestones||{})[cId]?.[field.fieldName] || []) : [];
+            planningPct = ems.filter(m=>m.planOnly).reduce((s,m)=>s+Number(m.pct||0),0);
+            bim = initialFee * planningPct / 100 * 0.15;
+          }
+          card1.push([field.fieldName||"", c.name.trim(), feePct+"%",
+            sectionEst||"—", initialFee ? Math.round(initialFee) : "—",
+            bim!==null&&bim>0 ? Math.round(bim) : "—"]);
+          const key = (field.fieldName||"")+"__"+(c.name.trim());
+          const saved = tRows6.find(r=>r.key===key)||{};
+          const doc1 = Number(saved.doc1||0);
+          const updatedFee = doc1 ? doc1 * feePct/100 : null;
+          const increase   = updatedFee!==null ? updatedFee - initialFee : null;
+          const bimUpdated = (updatedFee!==null && hasBIM) ? updatedFee * planningPct/100 * 0.15 : null;
+          const bimIncrease= (bimUpdated!==null && bim!==null) ? bimUpdated - bim : null;
+          card2.push([field.fieldName||"", c.name.trim(), feePct+"%",
+            fmtDate(saved.date||""), doc1||"—",
+            updatedFee!==null ? Math.round(updatedFee) : "—",
+            increase!==null ? Math.round(increase) : "—",
+            bimUpdated!==null ? Math.round(bimUpdated) : "—",
+            bimIncrease!==null ? Math.round(bimIncrease) : "—"]);
+        });
+      });
+      const tenderAoa = [["מצב קיים","","","","",""],...card1,
+        [],["אומדן מעודכן לפי מכרז","","","","","","","",""],
+        ...card2];
+      if (boqMeta6.boq) tenderAoa.unshift(["כתב כמויות קבלני", boqMeta6.boq, fmtDate(boqMeta6.boqDate||""),"","","","","",""]);
+      const tenderWs = XLSX.utils.aoa_to_sheet(tenderAoa);
+      finalize(tenderWs, [16,22,10,14,14,14,14,14,14]);
+      tenderWs['!views'] = [{rightToLeft:true}];
+      XLSX.utils.book_append_sheet(wb, tenderWs, "תוצאות מכרז");
+    })();
 
     // 7. חשבון קבלן סופי
     (() => {
@@ -6960,39 +7179,72 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     } catch(e) {}
   };
 
+  const doRestoreAll = (b) => {
+    if (b.projects)  { setProjects(b.projects);   saveProjects(b.projects); }
+    if (b.allData)   { setAllData(b.allData);      saveAllData(b.allData); }
+    if (b.suppliers) { setSuppliers(migrateSuppliers(b.suppliers)); }
+    if (b.companies) { setCompanies(b.companies); }
+    if (b.milestones){ setMilestones(b.milestones); }
+    if (b.statsRows) { setStatsRows(b.statsRows); }
+    setShowRestoreModal(false);
+    setRestoreStep("choice");
+    setPendingBackupData(null);
+    notify("✅ הנתונים שוחזרו בהצלחה!");
+  };
+
+  const doRestoreProject = (b, projId) => {
+    const proj = (b.projects||[]).find(p => String(p.id) === String(projId));
+    if (!proj) return;
+    setProjects(prev => {
+      const exists = prev.find(p => String(p.id) === String(projId));
+      const updated = exists ? prev.map(p => String(p.id)===String(projId) ? proj : p) : [...prev, proj];
+      saveProjects(updated);
+      return updated;
+    });
+    if (b.allData?.[projId]) {
+      setAllData(prev => {
+        const updated = { ...prev, [projId]: b.allData[projId] };
+        saveAllData(updated);
+        return updated;
+      });
+    }
+    setShowRestoreModal(false);
+    setRestoreStep("choice");
+    setPendingBackupData(null);
+    notify(`✅ הפרויקט "${proj.name}" שוחזר בהצלחה!`);
+  };
+
+  const handleRestoreFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = "";
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const b = JSON.parse(ev.target.result);
+        if (restoreModeRef.current === "all") {
+          doRestoreAll(b);
+        } else {
+          setPendingBackupData(b);
+          setRestoreStep("projects");
+          setShowRestoreModal(true);
+        }
+      } catch { notify("קובץ לא תקין"); }
+    };
+    reader.readAsText(file);
+  };
+
   const restoreFromStorage = () => {
     try {
       const json = localStorage.getItem("proj_backup_latest");
       if (!json) { notify("לא נמצא גיבוי שמור"); return; }
       const b = JSON.parse(json);
-      if (b.projects)  { setProjects(b.projects);   saveProjects(b.projects); }
-      if (b.allData)   { setAllData(b.allData);      saveAllData(b.allData); }
-      if (b.suppliers) { setSuppliers(migrateSuppliers(b.suppliers)); }
-      if (b.companies) { setCompanies(b.companies); }
-      if (b.milestones){ setMilestones(b.milestones); }
-      if (b.statsRows) { setStatsRows(b.statsRows); }
-      notify("✅ הנתונים שוחזרו בהצלחה!");
+      setPendingBackupData(b);
+      setRestoreStep("projects");
+      setShowRestoreModal(true);
     } catch(e) { notify("שגיאה בשחזור: " + e.message); }
   };
 
-  const importBackup = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try {
-        const b = JSON.parse(ev.target.result);
-        if (b.projects) { setProjects(b.projects); saveProjects(b.projects); }
-        if (b.allData)  { setAllData(b.allData);   saveAllData(b.allData); }
-        if (b.suppliers){ setSuppliers(b.suppliers); }
-        if (b.companies){ setCompanies(b.companies); }
-        if (b.milestones){ setMilestones(b.milestones); }
-        if (b.statsRows){ setStatsRows(b.statsRows); }
-        notify("✅ הנתונים יובאו בהצלחה!");
-      } catch { notify("קובץ לא תקין"); }
-    };
-    reader.readAsText(file);
-  };
 
   // ── tab data updater ─────────────────────────────────────────────────────
   // Each tab receives its own rows array and a setter for that array only.
@@ -7158,10 +7410,11 @@ function AppInner({ currentUser, userRole, setUserRole }) {
             style={{ flex:1, padding:"6px 8px", background:"#F0F2F5", border:"1px solid #E2E5EA", borderRadius:4, fontSize:11, color:"#3A3A3A", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>
             💾 גיבוי
           </button>
-          <label style={{ flex:1, padding:"6px 8px", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, fontSize:11, color:"#767676", cursor:"pointer", fontFamily:"'Heebo',sans-serif", textAlign:"center", fontWeight:600 }}>
+          <button onClick={() => { setRestoreStep("choice"); setShowRestoreModal(true); }}
+            style={{ flex:1, padding:"6px 8px", background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, fontSize:11, color:"#767676", cursor:"pointer", fontFamily:"'Heebo',sans-serif", textAlign:"center", fontWeight:600 }}>
             📂 שחזור
-            <input type="file" accept=".json" style={{ display:"none" }} onChange={importBackup} />
-          </label>
+          </button>
+          <input ref={restoreFileInputRef} type="file" accept=".json" style={{ display:"none" }} onChange={handleRestoreFileChange} />
         </div>
         )}
       </aside>
@@ -7366,41 +7619,40 @@ function AppInner({ currentUser, userRole, setUserRole }) {
             {(() => {
               return (
                 <div style={{ background:"#fff", borderBottom:"1px solid #E2E5EA", direction:"rtl" }}>
-                  {/* שם פרויקט — שורה עליונה */}
-                  <div style={{ padding:"14px 24px", borderBottom:"1px solid #F0F1F4", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                    <EditableName
-                      name={selectedProj.name}
-                      onChange={isAdmin ? (nm => {
-                        setProjects(prev => { const u = prev.map(p => p.id===selectedProj.id ? {...p,name:nm} : p); saveProjects(u); return u; });
-                        setSelectedProj(prev => ({...prev, name: nm}));
-                      }) : (() => {})}
-                      readOnly={!isAdmin}
-                    />
+                  {/* שם פרויקט + מספר + שנה — שורה אחת */}
+                  <div style={{ padding:"18px 24px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:32 }}>
+                      <EditableName
+                        name={selectedProj.name}
+                        onChange={isAdmin ? (nm => {
+                          setProjects(prev => { const u = prev.map(p => p.id===selectedProj.id ? {...p,name:nm} : p); saveProjects(u); return u; });
+                          setSelectedProj(prev => ({...prev, name: nm}));
+                        }) : (() => {})}
+                        readOnly={!isAdmin}
+                      />
+                      <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+                        <div style={{ width:1, height:22, background:"#E2E5EA" }} />
+                        <ProjectNumber
+                          value={allData[selectedProj.id]?.projectNumber || ""}
+                          onChange={isAdmin ? (v => setAllData(prev => ({ ...prev, [selectedProj.id]: { ...(prev[selectedProj.id]||makeProjectData()), projectNumber: v } }))) : (()=>{})}
+                          readOnly={!isAdmin}
+                        />
+                        <div style={{ width:1, height:22, background:"#E2E5EA" }} />
+                        <EditableYear
+                          year={selectedProj.year}
+                          onChange={isAdmin ? (yr => {
+                            setProjects(prev => { const u = prev.map(p => p.id===selectedProj.id ? {...p,year:yr} : p); saveProjects(u); return u; });
+                            setSelectedProj(prev => ({...prev, year: yr}));
+                          }) : (()=>{})}
+                          readOnly={!isAdmin}
+                        />
+                      </div>
+                    </div>
                     {/* ייצוא — צד שמאל */}
                     <button onClick={() => exportProjectToExcel(selectedProj)} className="allow-readonly"
-                      style={{ background:"#EFF7F3", border:"1px solid #C6E8D4", borderRadius:4, padding:"6px 14px", fontSize:13, color:"#1C4532", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, whiteSpace:"nowrap", flexShrink:0 }}>
+                      style={{ background:"#EFF7F3", border:"1px solid #C6E8D4", borderRadius:4, padding:"8px 14px", fontSize:13, color:"#1C4532", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, whiteSpace:"nowrap", flexShrink:0 }}>
                       📥 ייצוא לאקסל
                     </button>
-                  </div>
-                  {/* פרטי פרויקט — שורה שנייה */}
-                  <div style={{ padding:"8px 24px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                  <div style={{ width:1, height:22, background:"#E2E5EA" }} />
-                  {/* מספר פרויקט */}
-                  <ProjectNumber
-                    value={allData[selectedProj.id]?.projectNumber || ""}
-                    onChange={isAdmin ? (v => setAllData(prev => ({ ...prev, [selectedProj.id]: { ...(prev[selectedProj.id]||makeProjectData()), projectNumber: v } }))) : (()=>{})}
-                    readOnly={!isAdmin}
-                  />
-                  <div style={{ width:1, height:22, background:"#E2E5EA" }} />
-                  {/* שנה */}
-                  <EditableYear
-                    year={selectedProj.year}
-                    onChange={isAdmin ? (yr => {
-                      setProjects(prev => { const u = prev.map(p => p.id===selectedProj.id ? {...p,year:yr} : p); saveProjects(u); return u; });
-                      setSelectedProj(prev => ({...prev, year: yr}));
-                    }) : (()=>{})}
-                    readOnly={!isAdmin}
-                  />
                   </div>
                 </div>
               );
@@ -7450,17 +7702,46 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                 managers={managers}
                 planningManagerId={allData[selectedProj.id]?.planningManagerId||""}
                 executionManagerId={allData[selectedProj.id]?.executionManagerId||""}
+                unitManagerId={allData[selectedProj.id]?.unitManagerId||""}
                 onManagerChange={(role, id) => {
                   const m = managers.find(m => String(m.id) === String(id));
                   const fields = role === "planning"
                     ? { planningManagerId: id, planningManager: m?.name||"", planningManagerEmail: m?.email||"" }
+                    : role === "unit"
+                    ? { unitManagerId: id, unitManager: m?.name||"", unitManagerEmail: m?.email||"" }
                     : { executionManagerId: id, executionManager: m?.name||"", executionManagerEmail: m?.email||"" };
                   setAllData(prev => ({ ...prev, [selectedProj.id]: { ...(prev[selectedProj.id]||makeProjectData()), ...fields } }));
                 }}
                 isAdmin={isAdmin}
               />}
-              {activeTab === "quotes"      && <QuotesTab      rows={getData(selectedProj.id,"quotes")}      setRows={makeTabSetter(selectedProj.id,"quotes")} highlightFieldId={highlightFieldId} suppliers={suppliers} budgetState={allData[selectedProj.id]?.budgetState||{}} openingData={allData[selectedProj.id]?.openingData||{}} statsRows={statsRows} projectName={selectedProj.name||""} projectNumber={allData[selectedProj.id]?.projectNumber||""} companyName={companies.find(c=>String(c.id)===String(allData[selectedProj.id]?.companyId))?.name||""} companyId={String(allData[selectedProj.id]?.companyId||"")} workScopes={workScopes} projectMeta={{ id:selectedProj.id, name:selectedProj.name, status:selectedProj.status, domainManager:allData[selectedProj.id]?.domainManager||"", domainManagerEmail:allData[selectedProj.id]?.domainManagerEmail||"", tendersManager:allData[selectedProj.id]?.tendersManager||"", tendersManagerEmail:allData[selectedProj.id]?.tendersManagerEmail||"" }} />}
-              {activeTab === "consultants" && <ConsultantsTab rows={getData(selectedProj.id,"consultants")} setRows={makeTabSetter(selectedProj.id,"consultants")} quotesRows={getData(selectedProj.id,"quotes")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} openConsultantId={openConsultantId} scrollToIncreaseId={scrollToIncreaseId} suppliers={suppliers} projectName={selectedProj.name} openingData={allData[selectedProj.id]?.openingData||{}} setOpeningData={od => setAllData(prev => ({...prev, [selectedProj.id]: {...(prev[selectedProj.id]||makeProjectData()), openingData: od}}))} projectMeta={{ id:selectedProj.id, name:selectedProj.name, status:selectedProj.status, unitManager:allData[selectedProj.id]?.unitManager||"", unitManagerEmail:allData[selectedProj.id]?.unitManagerEmail||"" }} />}
+              {activeTab === "quotes"      && (() => {
+                const _uod2 = allData[selectedProj.id]?.openingData||{};
+                const _ubs2 = {...(allData[selectedProj.id]?.budgetState||{}), contractorEst: String(_uod2.contractorEst||"").replace(/,/g,"")||(allData[selectedProj.id]?.budgetState?.contractorEst||"")};
+                const _uRows2 = buildBudgetAllRows({ quotesRows:getData(selectedProj.id,"quotes"), consultantsRows:getData(selectedProj.id,"consultants"), budgetState:_ubs2, statsRows, accountsRows:getData(selectedProj.id,"accounts")||[], planOnlyMap:{}, openingData:_uod2 });
+                const _uTotal2 = _uRows2.reduce((s,r)=>s+(r.payType==="אחוזים"?r.computedFee:r.value)+r.increases, 0);
+                const _uTm2 = (getData(selectedProj.id,"tender")||[]).find(r=>r.key==="__meta__");
+                const _uBoq2 = Number(String(_uTm2?.boq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
+                const _uCm2 = (getData(selectedProj.id,"contractor")||[]).find(r=>r.key==="__meta__");
+                const _uFBq2 = Number(String(_uCm2?.finalBoq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
+                const _uCEst2 = Number(String(_uod2.contractorEst||_ubs2.contractorEst||"").replace(/,/g,"").replace(/[^\d.]/g,""));
+                const _uBase2 = _uFBq2>0?_uFBq2:_uBoq2>0?_uBoq2:_uCEst2;
+                const _utilPct2 = _uBase2>0 ? _uTotal2/_uBase2*100 : 0;
+                return <QuotesTab rows={getData(selectedProj.id,"quotes")} setRows={makeTabSetter(selectedProj.id,"quotes")} highlightFieldId={highlightFieldId} suppliers={suppliers} budgetState={allData[selectedProj.id]?.budgetState||{}} openingData={allData[selectedProj.id]?.openingData||{}} statsRows={statsRows} projectName={selectedProj.name||""} projectNumber={allData[selectedProj.id]?.projectNumber||""} companyName={companies.find(c=>String(c.id)===String(allData[selectedProj.id]?.companyId))?.name||""} companyId={String(allData[selectedProj.id]?.companyId||"")} workScopes={workScopes} projectMeta={{ id:selectedProj.id, name:selectedProj.name, status:selectedProj.status, domainManager:allData[selectedProj.id]?.domainManager||"", domainManagerEmail:allData[selectedProj.id]?.domainManagerEmail||"", tendersManager:allData[selectedProj.id]?.tendersManager||"", tendersManagerEmail:allData[selectedProj.id]?.tendersManagerEmail||"" }} consultantUtilPct={_utilPct2} />;
+              })()}
+              {activeTab === "consultants" && (() => {
+                const _uod3 = allData[selectedProj.id]?.openingData||{};
+                const _ubs3 = {...(allData[selectedProj.id]?.budgetState||{}), contractorEst: String(_uod3.contractorEst||"").replace(/,/g,"")||(allData[selectedProj.id]?.budgetState?.contractorEst||"")};
+                const _uRows3 = buildBudgetAllRows({ quotesRows:getData(selectedProj.id,"quotes"), consultantsRows:getData(selectedProj.id,"consultants"), budgetState:_ubs3, statsRows, accountsRows:getData(selectedProj.id,"accounts")||[], planOnlyMap:{}, openingData:_uod3 });
+                const _uTotal3 = _uRows3.reduce((s,r)=>s+(r.payType==="אחוזים"?r.computedFee:r.value)+r.increases, 0);
+                const _uTm3 = (getData(selectedProj.id,"tender")||[]).find(r=>r.key==="__meta__");
+                const _uBoq3 = Number(String(_uTm3?.boq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
+                const _uCm3 = (getData(selectedProj.id,"contractor")||[]).find(r=>r.key==="__meta__");
+                const _uFBq3 = Number(String(_uCm3?.finalBoq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
+                const _uCEst3 = Number(String(_uod3.contractorEst||_ubs3.contractorEst||"").replace(/,/g,"").replace(/[^\d.]/g,""));
+                const _uBase3 = _uFBq3>0?_uFBq3:_uBoq3>0?_uBoq3:_uCEst3;
+                const _utilPct3 = _uBase3>0 ? _uTotal3/_uBase3*100 : 0;
+                return <ConsultantsTab rows={getData(selectedProj.id,"consultants")} setRows={makeTabSetter(selectedProj.id,"consultants")} quotesRows={getData(selectedProj.id,"quotes")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} openConsultantId={openConsultantId} scrollToIncreaseId={scrollToIncreaseId} suppliers={suppliers} projectName={selectedProj.name} openingData={allData[selectedProj.id]?.openingData||{}} setOpeningData={od => setAllData(prev => ({...prev, [selectedProj.id]: {...(prev[selectedProj.id]||makeProjectData()), openingData: od}}))} projectMeta={{ id:selectedProj.id, name:selectedProj.name, status:selectedProj.status, unitManager:allData[selectedProj.id]?.unitManager||"", unitManagerEmail:allData[selectedProj.id]?.unitManagerEmail||"" }} milestones={milestones} localMilestones={allData[selectedProj.id]?.localMilestones||{}} companyId={String(allData[selectedProj.id]?.companyId||"")} consultantUtilPct={_utilPct3} />;
+              })()}
               {activeTab === "accounts"    && <AccountsTab    rows={getData(selectedProj.id,"accounts")}    setRows={makeTabSetter(selectedProj.id,"accounts")} quotesRows={getData(selectedProj.id,"quotes")} consultantsRows={getData(selectedProj.id,"consultants")} setConsultantsRows={makeTabSetter(selectedProj.id,"consultants")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} companyId={allData[selectedProj.id]?.companyId||""} milestones={milestones} openInvoiceId={openInvoiceId} openingData={allData[selectedProj.id]?.openingData||{}} localMilestones={allData[selectedProj.id]?.localMilestones||{}} setLocalMilestones={val=>setAllData(prev=>({...prev,[selectedProj.id]:{...(prev[selectedProj.id]||makeProjectData()),localMilestones:val}}))}
                 projectMeta={{ id:selectedProj.id, name:selectedProj.name, status:selectedProj.status, planningManager:allData[selectedProj.id]?.planningManager||"", planningManagerEmail:allData[selectedProj.id]?.planningManagerEmail||"", executionManager:allData[selectedProj.id]?.executionManager||"", executionManagerEmail:allData[selectedProj.id]?.executionManagerEmail||"", unitManager:allData[selectedProj.id]?.unitManager||"", unitManagerEmail:allData[selectedProj.id]?.unitManagerEmail||"" }}
                 onNavigate={(tab, consultantId) => {
@@ -7482,7 +7763,8 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                 const qRows  = getData(projId,"quotes");
                 const cRows  = getData(projId,"consultants");
                 const localMsMap = allData[projId]?.localMilestones || {};
-                const _archBase = cEst - cEst * devPct / 100;
+                const _archBaseManual = Number(String(allData[projId]?.openingData?.archBase||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
+                const _archBase = _archBaseManual > 0 ? _archBaseManual : cEst - cEst * devPct / 100;
                 const planOnlyMap = {};
                 (qRows||[]).forEach(fg => {
                   (fg.consultants||[]).forEach(c => {
@@ -7535,8 +7817,8 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                   }}
                 />;
               })()}
-              {activeTab === "tender"      && <TenderTab      rows={getData(selectedProj.id,"tender")}      setRows={makeTabSetter(selectedProj.id,"tender")} quotesRows={getData(selectedProj.id,"quotes")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} openingData={allData[selectedProj.id]?.openingData||{}} milestones={milestones} localMilestones={allData[selectedProj.id]?.localMilestones||{}} companyId={allData[selectedProj.id]?.companyId||""} />}
-              {activeTab === "contractor"  && <ContractorTab  rows={getData(selectedProj.id,"contractor")}  setRows={makeTabSetter(selectedProj.id,"contractor")} quotesRows={getData(selectedProj.id,"quotes")} tenderRows={getData(selectedProj.id,"tender")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} openingData={allData[selectedProj.id]?.openingData||{}} milestones={milestones} localMilestones={allData[selectedProj.id]?.localMilestones||{}} companyId={allData[selectedProj.id]?.companyId||""} />}
+              {activeTab === "tender"      && <TenderTab      rows={getData(selectedProj.id,"tender")}      setRows={makeTabSetter(selectedProj.id,"tender")} quotesRows={getData(selectedProj.id,"quotes")} consultantsRows={getData(selectedProj.id,"consultants")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} openingData={allData[selectedProj.id]?.openingData||{}} milestones={milestones} localMilestones={allData[selectedProj.id]?.localMilestones||{}} companyId={allData[selectedProj.id]?.companyId||""} />}
+              {activeTab === "contractor"  && <ContractorTab  rows={getData(selectedProj.id,"contractor")}  setRows={makeTabSetter(selectedProj.id,"contractor")} quotesRows={getData(selectedProj.id,"quotes")} tenderRows={getData(selectedProj.id,"tender")} consultantsRows={getData(selectedProj.id,"consultants")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} openingData={allData[selectedProj.id]?.openingData||{}} milestones={milestones} localMilestones={allData[selectedProj.id]?.localMilestones||{}} companyId={allData[selectedProj.id]?.companyId||""} />}
             </div>
           </div>
         )}
@@ -7557,7 +7839,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                 <div style={{ fontSize:12, color:"#9A9A9A", marginTop:2 }}>חלוקת אחוזים סטנדרטית למקצועות</div>
               </div>
               <button onClick={() => setShowStats(false)}
-                style={{ background:"#F0F2F5", border:"none", borderRadius:8, width:32, height:32, fontSize:16, cursor:"pointer", color:"#767676", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+                style={{ background:"#F0F2F5", border:"none", borderRadius:4, width:32, height:32, fontSize:16, cursor:"pointer", color:"#767676", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
             </div>
 
             {/* Table */}
@@ -7704,6 +7986,59 @@ function AppInner({ currentUser, userRole, setUserRole }) {
       )}
 
       {/* ── Backup Confirm Modal ── */}
+      {showRestoreModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.55)", zIndex:9000, display:"flex", alignItems:"center", justifyContent:"center" }}
+          onClick={() => { setShowRestoreModal(false); setRestoreStep("choice"); setPendingBackupData(null); }}>
+          <div className="fade" onClick={e=>e.stopPropagation()}
+            style={{ background:"#fff", borderRadius:8, padding:"28px 32px", maxWidth:420, width:"90%", boxShadow:"0 24px 64px #0004", direction:"rtl", fontFamily:"'Heebo',sans-serif" }}>
+            <div style={{ fontSize:17, fontWeight:800, color:"#0D0D0D", marginBottom:20 }}>📂 שחזור נתונים</div>
+
+            {restoreStep === "choice" && (
+              <>
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  <button onClick={() => { restoreModeRef.current="all"; setShowRestoreModal(false); setTimeout(()=>restoreFileInputRef.current.click(), 50); }}
+                    style={{ background:"#0B1F3A", color:"#fff", border:"none", borderRadius:4, padding:"12px 16px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"'Heebo',sans-serif", textAlign:"right" }}>
+                    שחזר הכל
+                    <div style={{ fontSize:11, fontWeight:400, opacity:0.7, marginTop:2 }}>ידרוס את כל הנתונים הקיימים</div>
+                  </button>
+                  <button onClick={() => { restoreModeRef.current="project"; setShowRestoreModal(false); setTimeout(()=>restoreFileInputRef.current.click(), 50); }}
+                    style={{ background:"#F7F8FA", color:"#0D0D0D", border:"1.5px solid #E2E5EA", borderRadius:4, padding:"12px 16px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"'Heebo',sans-serif", textAlign:"right" }}>
+                    שחזר פרויקט בודד
+                    <div style={{ fontSize:11, fontWeight:400, color:"#767676", marginTop:2 }}>ימזג פרויקט אחד מבלי לגעת בשאר</div>
+                  </button>
+                </div>
+                <button onClick={() => { setShowRestoreModal(false); setRestoreStep("choice"); }}
+                  style={{ marginTop:16, background:"none", border:"none", color:"#767676", fontSize:13, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>
+                  ביטול
+                </button>
+              </>
+            )}
+
+            {restoreStep === "projects" && pendingBackupData && (
+              <>
+                <div style={{ fontSize:12, color:"#767676", marginBottom:12 }}>
+                  {pendingBackupData.exportedAt ? new Date(pendingBackupData.exportedAt).toLocaleString("he-IL") : ""}
+                  {" · "}{(pendingBackupData.projects||[]).length} פרויקטים בגיבוי
+                </div>
+                <div style={{ fontSize:12, fontWeight:700, color:"#767676", marginBottom:8 }}>בחר פרויקט לשחזור:</div>
+                <div style={{ maxHeight:300, overflowY:"auto", display:"flex", flexDirection:"column", gap:4 }}>
+                  {(pendingBackupData.projects||[]).map(p => (
+                    <button key={p.id} onClick={() => doRestoreProject(pendingBackupData, p.id)}
+                      style={{ background:"#F7F8FA", border:"1px solid #E2E5EA", borderRadius:4, padding:"9px 12px", fontSize:13, textAlign:"right", cursor:"pointer", fontFamily:"'Heebo',sans-serif", color:"#0D0D0D", fontWeight:600 }}>
+                      {p.name||"(ללא שם)"}{p.year ? ` · ${p.year}` : ""}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setRestoreStep("choice")}
+                  style={{ marginTop:14, background:"none", border:"none", color:"#767676", fontSize:13, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>
+                  ← חזרה
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {showBackupConfirm && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:3000 }}
           onClick={() => setShowBackupConfirm(false)}>
@@ -7712,7 +8047,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
               <div style={{ fontSize:17, fontWeight:800, color:"#0D0D0D" }}>💾 גיבוי נתונים</div>
               <button onClick={() => setShowBackupConfirm(false)}
-                style={{ background:"#F0F2F5", border:"none", borderRadius:8, width:30, height:30, fontSize:15, cursor:"pointer", color:"#767676" }}>✕</button>
+                style={{ background:"#F0F2F5", border:"none", borderRadius:4, width:30, height:30, fontSize:15, cursor:"pointer", color:"#767676" }}>✕</button>
             </div>
             <div style={{ fontSize:12, fontWeight:700, color:"#767676", marginBottom:6, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
               <span>מיקום שמירה</span>
@@ -7750,7 +8085,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                 </div>
               </div>
               <button onClick={() => setShowBackupModal(false)}
-                style={{ background:"#F0F2F5", border:"none", borderRadius:8, width:32, height:32, fontSize:16, cursor:"pointer", color:"#767676" }}>✕</button>
+                style={{ background:"#F0F2F5", border:"none", borderRadius:4, width:32, height:32, fontSize:16, cursor:"pointer", color:"#767676" }}>✕</button>
             </div>
             <button
               onClick={() => {
