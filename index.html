@@ -937,11 +937,15 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
         return cEst * pp * pct;
       };
       const allC = (field.consultants||[]).filter(c => c.name);
-      const tableRows = allC.map(c => {
+      const tableRows = allC.flatMap(c => {
         const fee = c.payType === "אחוזים" ? calcFee(c) : null;
-        return [c.name, c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:fmt(c.value), fee?fmt(fee):(c.payType!=="אחוזים"?fmt(c.value):"—"), c.notes||""];
+        const hasSub = c.subItems && c.subItems.length > 0;
+        const subTotal = hasSub ? c.subItems.reduce((s,it)=>s+Number(it.amount||0),0) : null;
+        const mainRow = [c.name, c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:fmt(c.value), fee?fmt(fee):(c.payType!=="אחוזים"?fmt(hasSub?subTotal:c.value):"—"), c.notes||""];
+        if (!hasSub) return [mainRow];
+        return [mainRow, ...c.subItems.map(it => [`  ↳ ${it.description||""}`, "", "", fmt(it.amount), ""])];
       });
-      const rowHighlights = allC.map(c => c.id === newlyRec.id);
+      const rowHighlights = allC.flatMap(c => [c.id === newlyRec.id, ...(c.subItems||[]).map(()=>false)]);
       const _tIntro = `שלום ${projectMeta.tendersManager || ""},\n\nבפרויקט ${projectMeta.name} היועץ ${newlyRec.name} נבחר כמומלץ עבור תחום ${field.fieldName}\nלהלן כל הצעות המחיר:`;
       const _tOutro = `יש להעביר את ההמלצה למזמין לאישור.${_utilWarn1}\n\nבברכה,\nמערכת CostPilot`;
       const body = `${_tIntro}\n\n${_tOutro}`;
@@ -975,15 +979,13 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
           return cEst * pp * pct;
         };
         const consultants = (field.consultants||[]).filter(c => c.name);
-        const tableRows = consultants.map(c => {
+        const tableRows = consultants.flatMap(c => {
           const fee = c.payType === "אחוזים" ? calcFee(c) : null;
-          return [
-            c.name || "—",
-            c.payType || "—",
-            c.payType === "אחוזים" ? `${c.value || 0}%` : fmt(c.value),
-            fee ? fmt(fee) : (c.payType !== "אחוזים" ? fmt(c.value) : "—"),
-            c.notes || ""
-          ];
+          const hasSub = c.subItems && c.subItems.length > 0;
+          const subTotal = hasSub ? c.subItems.reduce((s,it)=>s+Number(it.amount||0),0) : null;
+          const mainRow = [c.name||"—", c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:fmt(c.value), fee?fmt(fee):(c.payType!=="אחוזים"?fmt(hasSub?subTotal:c.value):"—"), c.notes||""];
+          if (!hasSub) return [mainRow];
+          return [mainRow, ...c.subItems.map(it => [`  ↳ ${it.description||""}`, "", "", fmt(it.amount), ""])];
         });
         const _utilWarn2 = (consultantUtilPct||0) >= 10
           ? `\n\n${(consultantUtilPct||0) >= 12 ? "⚠️" : "ℹ️"} אחוז ניצול יועצים: ${(consultantUtilPct||0).toFixed(1)}% — ${(consultantUtilPct||0) >= 12 ? "חריגה מעל 12%" : "קרוב לתקרה (12%)"}`
@@ -1075,8 +1077,14 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
           onSentToMunicipality={c => {
             if (!projectMeta) return;
             const consultants = (field.consultants||[]).filter(con => con.name);
-            const tableRows = consultants.map(con => [con.name||"—", con.payType||"—", con.payType==="אחוזים" ? `${con.value||0}%` : fmt(con.value), con.notes||""]);
-            const rowHighlights = consultants.map(con => con.id === c.id);
+            const tableRows = consultants.flatMap(con => {
+              const hasSub = con.subItems && con.subItems.length > 0;
+              const subTotal = hasSub ? con.subItems.reduce((s,it)=>s+Number(it.amount||0),0) : null;
+              const mainRow = [con.name||"—", con.payType||"—", con.payType==="אחוזים"?`${con.value||0}%`:fmt(hasSub?subTotal:con.value), con.notes||""];
+              if (!hasSub) return [mainRow];
+              return [mainRow, ...con.subItems.map(it => [`  ↳ ${it.description||""}`, "", fmt(it.amount), ""])];
+            });
+            const rowHighlights = consultants.flatMap(con => [con.id === c.id, ...(con.subItems||[]).map(()=>false)]);
             const subject = `פרויקט ${projectMeta.name} – תחום- ${field.fieldName}`;
             const intro = `שלום,\n\nבפרויקט ${projectMeta.name} תחום ${field.fieldName} מועבר לאישורכם ראו הצעות היועצים.\nהמלצתנו להתקשרות עם יועץ "${c.name}"`;
             const outro = "בברכה,";
@@ -1243,6 +1251,11 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
     document.execCommand("copy");
     document.removeEventListener("copy", onCopy);
     window.location.href = `mailto:?bcc=${encodeURIComponent(bccEmails.join(";"))}&subject=${encodeURIComponent(subject)}`;
+    // Mark each invited (non-recommended) consultant as invited — preserve original date
+    const _now = Date.now();
+    onUpdateConsultants(field.consultants.map(c =>
+      (!c.recommended && !c.quoteInvitedAt) ? { ...c, quoteInvitedAt: _now } : c
+    ));
   };
 
   const fieldSuppliers = (suppliers||[]).filter(s => (Array.isArray(s.field) ? s.field : (s.field ? [s.field] : [])).includes(field.fieldName));
@@ -6264,7 +6277,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
   // Zone C: הוחזר ליועץ לתיקון
   // Zone 2: ממתין להעברה לחברה העירונית
   // Zone 3: ממתין לאישור החברה העירונית
-  const zoneA = [], zoneB = [], zoneC = [], zoneUM = [], zoneSend = [], zone2 = [], zone3 = [], zoneIncSend = [];
+  const zoneA = [], zoneB = [], zoneC = [], zoneUM = [], zoneSend = [], zone2 = [], zone3 = [], zoneIncSend = [], zoneQuote = [];
 
   projects.forEach(proj => {
     // ── Consultant quotes ──
@@ -6286,6 +6299,21 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
             managerName:  (managers||[]).find(m=>m.role==="domain")?.name  || da.domainManager  || "",
             stage: "recommendation", savedEmail: field._lastRecommendEmail || null });
         }
+      }
+      // Zone Quote: ממתין לקבלת הצעת מחיר — נעלם כשיש המלצה כלשהי בתחום
+      // Zone Quote: נעלם כולו כשיש המלצה בתחום; שורה בודדת נעלמת כשמתקבלת הצעה מאותו יועץ
+      const fieldHasRecommendation = field.consultants.some(c => c.recommended) || !!field.readyToRecommend;
+      if (!fieldHasRecommendation) {
+        field.consultants.filter(c => c.name?.trim() && c.quoteInvitedAt && !c.value).forEach(c =>
+          zoneQuote.push({ projId: proj.id, projName: proj.name, fieldId: field.id, fieldName: field.fieldName || "",
+            label: c.name.trim(), value: null, payType: null, type:"consultant", key: `zq-${proj.id}-${field.id}-${c.id}`, tab:"quotes",
+            consultantId: c.id,
+            createdAt: c.quoteInvitedAt, pendingSince: c.quoteInvitedAt,
+            lastEmailAt: c.quoteInviteLastEmailAt || null,
+            reminderCount: c.quoteInviteReminderCount || 0,
+            managerEmail: c.email || "", managerName: c.name.trim(),
+            stage: "quote_invite" })
+        );
       }
       field.consultants.filter(c => c.name?.trim() && c.recommended && !c.sentToMunicipality && !c.approved).forEach(c =>
         zoneSend.push({ projId: proj.id, projName: proj.name, fieldId: field.id, fieldName: field.fieldName,
@@ -6514,6 +6542,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
       municipality_consultant: `פרויקט ${item.projName} – תחום- ${item.fieldName||""}`,
       municipality_increase: `פרויקט ${item.projName} - אישור הגדלה ליועץ- ${item.fieldName||""}`,
       send_to_municipality: `פרויקט ${item.projName} – תחום- ${item.fieldName||""}`,
+      quote_invite: `תזכורת: בקשה להגשת הצ"מ — ${item.projName} — ${item.fieldName||""}`,
     };
     const buildEmail = () => {
       const d = allData[item.projId] || {};
@@ -6798,6 +6827,13 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
         }
       }
 
+      // ── quote_invite: reminder to consultant to submit quote ──────────────
+      if (item.stage === "quote_invite") {
+        const greeting = item.managerName ? `שלום ${item.managerName},\n${reminderLine}` : `שלום רב,\n${reminderLine}`;
+        const qBody = `${greeting}\n\nבהמשך להזמנה שנשלחה אליך להגשת הצעת מחיר עבור פרויקט "${item.projName}" בתחום "${item.fieldName||""}", אנו מזכירים לך שטרם קיבלנו את הצעתך.\n\nנשמח לקבל את הצעת המחיר בהקדם.\n\nבברכה,\nמערכת CostPilot`;
+        return { body: qBody, htmlBody: null, toEmail: item.managerEmail || "" };
+      }
+
       // ── Fallback ──────────────────────────────────────────────────────────
       return { body: `${repeatHeader}\n\nתזכורת — ${item.detail || item.fieldName || ""} בפרויקט "${item.projName}"`, htmlBody: null, toEmail };
     };
@@ -6827,6 +6863,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
   };
 
   const zones = [
+    { title:"המתנה לקבלת הצעת מחיר", items:zoneQuote, color:"#163356", bg:"#EAF1FA", border:"#D4E4F4", icon:"📨", emptyText:"אין ספקים הממתינים להגשת הצעת מחיר" },
     { title:"ממתין להמלצה על יועצים", items:zoneA,  color:"#5C3D10", bg:"#FAF2E6", border:"#FAF2E6", icon:"⏳", emptyText:"אין פריטים ממתינים" },
     { title:"ממתין להעברה לאישור מנהל", items:zoneIncSend, color:"#5C3D10", bg:"#FAF2E6", border:"#FAF2E6", icon:"📨", emptyText:"אין הגדלות הממתינות להעברה למנהל" },
     { title:"ממתין לאישור מנהל פרויקט",                    items:zoneB,  color:"#163356", bg:"#EAF1FA", border:"#D4E4F4", icon:"👤", emptyText:"אין חשבונות הממתינים לאישור מנהל פרויקט", groupByManager:true },
@@ -7074,16 +7111,6 @@ function OpeningTab({ data, setData, budgetState, setBudgetState, statsRows, pro
               <select value={executionManagerId||""} disabled={!isAdmin} onChange={isAdmin ? e => onManagerChange("execution", e.target.value) : undefined} style={selectStyle}>
                 <option value="">בחר מנהל ביצוע</option>
                 {executionMgrs.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </td>
-          </tr>
-          {/* מנהל יחידה */}
-          <tr style={{ background:"#F7F8FA" }}>
-            <td style={{ padding:"10px 16px", textAlign:"right", color:"#3A3A3A", fontSize:13, width:"50%", borderBottom:"1px solid #E2E5EA", borderLeft:"1px solid #E2E5EA", verticalAlign:"middle" }}>מנהל יחידה</td>
-            <td style={{ padding:"10px 16px", textAlign:"right", fontSize:13, width:"50%", borderBottom:"1px solid #E2E5EA", verticalAlign:"middle" }}>
-              <select value={unitManagerId||""} disabled={!isAdmin} onChange={isAdmin ? e => onManagerChange("unit", e.target.value) : undefined} style={selectStyle}>
-                <option value="">בחר מנהל יחידה</option>
-                {unitMgrs.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </td>
           </tr>
@@ -8059,6 +8086,8 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                   return { ...prev, [item.projId]: { ...pd, quotes: (pd.quotes||[]).map(f => f.id===item.fieldId ? {...f, consultants:(f.consultants||[]).map(c => c.id===item.consultantId ? {...c, municipalityLastEmailAt:now, municipalityReminderCount:(c.municipalityReminderCount||0)+1} : c)} : f) } };
                 if (item.stage === "municipality_increase" && item.increaseId)
                   return { ...prev, [item.projId]: { ...pd, consultants: (pd.consultants||[]).map(c => c.id===item.consultantId ? {...c, increases:(c.increases||[]).map(x => x.id===item.increaseId ? {...x, municipalityLastEmailAt:now, municipalityReminderCount:(x.municipalityReminderCount||0)+1} : x)} : c) } };
+                if (item.stage === "quote_invite" && item.consultantId && item.fieldId)
+                  return { ...prev, [item.projId]: { ...pd, quotes: (pd.quotes||[]).map(f => f.id===item.fieldId ? {...f, consultants:(f.consultants||[]).map(c => c.id===item.consultantId ? {...c, quoteInviteLastEmailAt:now, quoteInviteReminderCount:(c.quoteInviteReminderCount||0)+1} : c)} : f) } };
                 return prev;
               });
             }}
