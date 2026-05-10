@@ -908,52 +908,40 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
     setRows(rows.map(r => r.id === fieldId ? { ...r, consultants: newConsultants } : r));
   };
 
-  const prevRowsRef = React.useRef(rows);
-  useEffect(() => {
-    const prevRows = prevRowsRef.current;
-    prevRowsRef.current = rows;
+  const buildRecommendEmail = (field, newlyRec) => {
     if (!projectMeta) return;
-    for (const field of rows) {
-      const prevField = prevRows.find(f => f.id === field.id);
-      if (!prevField) continue;
-      const newlyRec = (field.consultants||[]).find(c =>
-        c.name && c.recommended && !(prevField.consultants||[]).find(oc => oc.id === c.id)?.recommended
-      );
-      if (!newlyRec) continue;
-      const subject = `פרויקט ${projectMeta.name} – התקבלה המלצה על יועץ - ${field.fieldName}`;
-      const _utilWarn1 = (consultantUtilPct||0) >= 10
-        ? `\n\n${(consultantUtilPct||0) >= 12 ? "⚠️" : "ℹ️"} אחוז ניצול יועצים: ${(consultantUtilPct||0).toFixed(1)}% — ${(consultantUtilPct||0) >= 12 ? "חריגה מעל 12%" : "קרוב לתקרה (12%)"}`
-        : "";
-      const cEst = Number(String((openingData||{}).contractorEst||"").replace(/,/g,"")) || Number((budgetState||{}).contractorEst||0);
-      const devPct = (statsRows||[]).filter(r=>(r.field||"").includes("פיתוח")||(r.field||"").includes("נוף")).reduce((s,r)=>s+Number(r.pct||0),0);
-      const archBase = cEst - cEst * devPct / 100;
-      const calcFee = c => {
-        const pct = Number(c.value||0) / 100;
-        const fn = field.fieldName || "";
-        if (!cEst || !pct) return 0;
-        if (["אדריכל","אדריכלות","אדריכלים"].includes((fn||"").trim())) return archBase * pct;
-        if (fn.includes("מנהל פרויקט")) return cEst * pct;
-        const pp = Number((statsRows||[]).find(r=>r.field===fn)?.pct||0)/100;
-        return cEst * pp * pct;
-      };
-      const allC = (field.consultants||[]).filter(c => c.name);
-      const tableRows = allC.flatMap(c => {
-        const fee = c.payType === "אחוזים" ? calcFee(c) : null;
-        const hasSub = c.subItems && c.subItems.length > 0;
-        const subTotal = hasSub ? c.subItems.reduce((s,it)=>s+Number(it.amount||0),0) : null;
-        const mainRow = [c.name, c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:fmt(c.value), fee?fmt(fee):(c.payType!=="אחוזים"?fmt(hasSub?subTotal:c.value):"—"), c.notes||""];
-        if (!hasSub) return [mainRow];
-        return [mainRow, ...c.subItems.map(it => [`  ↳ ${it.description||""}`, "", "", fmt(it.amount), ""])];
-      });
-      const rowHighlights = allC.flatMap(c => [c.id === newlyRec.id, ...(c.subItems||[]).map(()=>false)]);
-      const _tIntro = `שלום ${projectMeta.tendersManager || ""},\n\nבפרויקט ${projectMeta.name} היועץ ${newlyRec.name} נבחר כמומלץ עבור תחום ${field.fieldName}\nלהלן כל הצעות המחיר:`;
-      const _tOutro = `יש להעביר את ההמלצה למזמין לאישור.${_utilWarn1}\n\nבברכה,\nמערכת CostPilot`;
-      const body = `${_tIntro}\n\n${_tOutro}`;
-      const htmlBody = buildEmailHtml(_tIntro, ["יועץ", "סוג תשלום", "ערך", "סכום ", "הערות"], tableRows.length > 0 ? tableRows : [["—","","","",""]], _tOutro, rowHighlights);
-      setApprovalModal({ toEmail: projectMeta.tendersManagerEmail||"", toName: projectMeta.tendersManager, subject, body, htmlBody });
-      break;
-    }
-  }, [rows]);
+    const subject = `פרויקט ${projectMeta.name} – התקבלה המלצה על יועץ - ${field.fieldName}`;
+    const _utilWarn1 = (consultantUtilPct||0) >= 10
+      ? `\n\n${(consultantUtilPct||0) >= 12 ? "⚠️" : "ℹ️"} אחוז ניצול יועצים: ${(consultantUtilPct||0).toFixed(1)}% — ${(consultantUtilPct||0) >= 12 ? "חריגה מעל 12%" : "קרוב לתקרה (12%)"}`
+      : "";
+    const cEst = Number(String((openingData||{}).contractorEst||"").replace(/,/g,"")) || Number((budgetState||{}).contractorEst||0);
+    const devPct = (statsRows||[]).filter(r=>(r.field||"").includes("פיתוח")||(r.field||"").includes("נוף")).reduce((s,r)=>s+Number(r.pct||0),0);
+    const archBase = cEst - cEst * devPct / 100;
+    const calcFee = c => {
+      const pct = Number(c.value||0) / 100;
+      const fn = field.fieldName || "";
+      if (!cEst || !pct) return 0;
+      if (["אדריכל","אדריכלות","אדריכלים"].includes((fn||"").trim())) return archBase * pct;
+      if (fn.includes("מנהל פרויקט")) return cEst * pct;
+      const pp = Number((statsRows||[]).find(r=>r.field===fn)?.pct||0)/100;
+      return cEst * pp * pct;
+    };
+    const allC = (field.consultants||[]).filter(c => c.name);
+    const tableRows = allC.flatMap(c => {
+      const fee = c.payType === "אחוזים" ? calcFee(c) : null;
+      const hasSub = c.subItems && c.subItems.length > 0;
+      const subTotal = hasSub ? c.subItems.reduce((s,it)=>s+Number(it.amount||0),0) : null;
+      const mainRow = [c.name, c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:fmt(c.value), fee?fmt(fee):(c.payType!=="אחוזים"?fmt(hasSub?subTotal:c.value):"—"), c.notes||""];
+      if (!hasSub) return [mainRow];
+      return [mainRow, ...c.subItems.map(it => [`  ↳ ${it.description||""}`, "", "", fmt(it.amount), ""])];
+    });
+    const rowHighlights = allC.flatMap(c => [c.id === newlyRec.id, ...(c.subItems||[]).map(()=>false)]);
+    const _tIntro = `שלום ${projectMeta.tendersManager || ""},\n\nבפרויקט ${projectMeta.name} היועץ ${newlyRec.name} נבחר כמומלץ עבור תחום ${field.fieldName}\nלהלן כל הצעות המחיר:`;
+    const _tOutro = `יש להעביר את ההמלצה למזמין לאישור.${_utilWarn1}\n\nבברכה,\nמערכת CostPilot`;
+    const body = `${_tIntro}\n\n${_tOutro}`;
+    const htmlBody = buildEmailHtml(_tIntro, ["יועץ", "סוג תשלום", "ערך", "סכום ", "הערות"], tableRows.length > 0 ? tableRows : [["—","","","",""]], _tOutro, rowHighlights);
+    setApprovalModal({ toEmail: projectMeta.tendersManagerEmail||"", toName: projectMeta.tendersManager, subject, body, htmlBody });
+  };
 
   const updateFieldName = (fieldId, name) => {
     setRows(rows.map(r => r.id === fieldId ? { ...r, fieldName: name } : r));
@@ -1074,6 +1062,24 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
           companyName={companyName}
           companyId={companyId}
           workScopes={workScopes}
+          onApproved={c => {
+            if (!projectMeta) return;
+            const execMgr = (managers||[]).find(m => m.role === "execution");
+            const planMgr = (managers||[]).find(m => m.role === "planning");
+            const hasMeta = projectMeta.executionManager || projectMeta.executionManagerEmail;
+            const targetName  = hasMeta ? (projectMeta.executionManager  || execMgr?.name  || "") : (projectMeta.planningManager  || planMgr?.name  || "");
+            const targetEmail = hasMeta ? (projectMeta.executionManagerEmail || execMgr?.email || "") : (projectMeta.planningManagerEmail || planMgr?.email || "");
+            const sup = (suppliers||[]).find(s => s.name === c.name || (s.contacts||[]).some(ct => ct.email && ct.email === c.email));
+            const cts = sup?.contacts || [];
+            const contactLines = cts.length > 0
+              ? cts.map(ct => [ct.contact ? `שם איש קשר: ${ct.contact}` : "", ct.phone ? `טלפון: ${ct.phone}` : "", ct.phone2 ? `נייד: ${ct.phone2}` : "", ct.email ? `מייל: ${ct.email}` : ""].filter(Boolean).join(" | ")).join("\n")
+              : (c.phone || c.email ? [c.phone?`טלפון: ${c.phone}`:"", c.email?`מייל: ${c.email}`:""].filter(Boolean).join(" | ") : "לא נמצאו פרטי קשר");
+            const subject = `${projectMeta.name} - אישור יועץ ${field.fieldName}`;
+            const greeting = targetName ? `שלום ${targetName},` : "שלום,";
+            const body = `${greeting}\n\nבפרויקט ${projectMeta.name} אושרה התקשרות עם יועץ ${field.fieldName} - ${c.name}\nניתן לפנות אליו לתחילת עבודה בפרויקט.\nפרטי הקשר שלו הינם:\n${contactLines}\nהיועץ נוסף לרשימת היועצים של הפרויקט.\n\nבברכה,\nמערכת CostPilot`;
+            setApprovalModal({ toEmail: targetEmail, toName: targetName, subject, body, htmlBody: null });
+          }}
+          onRecommended={c => buildRecommendEmail(field, c)}
           onSentToMunicipality={c => {
             if (!projectMeta) return;
             const consultants = (field.consultants||[]).filter(con => con.name);
@@ -1098,7 +1104,7 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
   );
 }
 
-function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers, onToggleReady, isHighlighted, budgetState, openingData, statsRows, projectName, projectNumber, companyName, companyId, workScopes, onUpdateWorkScope, onSentToMunicipality }) {
+function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers, onToggleReady, isHighlighted, budgetState, openingData, statsRows, projectName, projectNumber, companyName, companyId, workScopes, onUpdateWorkScope, onSentToMunicipality, onApproved, onRecommended }) {
   const emptyC = { id:0, name:"", payType:"אחוזים", value:"", notes:"", recommended:false, approved:false, sentToMunicipality:false,
                    contact:"", phone:"", phone2:"", email:"" };
   const [editingName, setEditingName] = useState(false);
@@ -1157,19 +1163,21 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
     const lines = [
       "שלום רב,",
       "",
-      "אנו מזמינים אתכם להגיש הצעת מחיר עבור הפרויקט הבא:",
-      "",
-      `שם הפרויקט: ${val(projectName)}`,
+      `אנו מזמינים אתכם להגיש הצעת מחיר עבור פרויקט ${val(projectName)}`,
       `כתובת: ${val(d.address)}`,
       `מהות העבודה: ${val(d.workDescription)}`,
       `תאריך התחלה: ${fmtDate(d.startDate) || "—"}`,
       `תאריך סיום: ${fmtDate(d.endDate) || "—"}`,
       `שטח החלקה: ${d.plotArea ? d.plotArea + ' מ"ר' : "—"}`,
       `שטח המבנה: ${d.buildingArea ? d.buildingArea + ' מ"ר' : "—"}`,
-      `אומדן קבלני: ${fmtNum(d.contractorEst) ? fmtNum(d.contractorEst) + " " : "—"}`,
+      `אומדן קבלני: ${fmtNum(d.contractorEst) ? fmtNum(d.contractorEst) + " ₪" : "—"}`,
       `כמות מעליות: ${val(d.elevators)}`,
       `כמות עצים: ${val(d.trees)}`,
       `שימוש ב-BIM: ${d.bim === false ? "לא" : "כן"}`,
+      "",
+      "יש להגיש הצעתכם עד תאריך: ",
+      "",
+      "בברכה,",
     ];
     const body = lines.join("\n");
     const subject = `הזמנה להגשת הצעת מחיר - ${projectName || "פרויקט"} - ${field.fieldName}`;
@@ -1341,7 +1349,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
                 style={{ borderBottom:(expandedSubs[c.id])?"none":"1px solid #C6E8D4", background:c.approved ? "#EFF7F3" : c.recommended ? "#EAF1FA" : i%2===0?"#fff":"#FAFBFC", transition:"background .15s" }}>
                 {/* המלצה */}
                 <td style={{ padding:"10px 12px", textAlign:"right" }}>
-                  <input type="checkbox" checked={!!c.recommended} onChange={e => updateC(c.id,"recommended",e.target.checked)}
+                  <input type="checkbox" checked={!!c.recommended} onChange={e => { updateC(c.id,"recommended",e.target.checked); if (e.target.checked) onRecommended?.(c); }}
                     style={{ width:16, height:16, cursor:"pointer", accentColor:"#444444" }} />
                 </td>
                 {/* שם */}
@@ -1422,7 +1430,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
                 </td>
                 {/* אושר היועץ */}
                 <td style={{ padding:"10px 8px", textAlign:"center", width:60 }}>
-                  <input type="checkbox" checked={!!c.approved} onChange={e => updateC(c.id,"approved",e.target.checked)}
+                  <input type="checkbox" checked={!!c.approved} onChange={e => { updateC(c.id,"approved",e.target.checked); if (e.target.checked) onApproved?.(c); }}
                     style={{ width:16, height:16, cursor:"pointer", accentColor:"#444444" }} />
                 </td>
                 {/* מחק */}
