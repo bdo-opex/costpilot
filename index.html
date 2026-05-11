@@ -104,6 +104,22 @@
       }, err => console.error("subscribe error", key, err));
     };
 
+    // ── Per-project Firestore helpers ─────────────────────────────────────────
+    const saveProjectData = (projId, data) => {
+      const { db, doc, setDoc } = getFirebase();
+      return setDoc(doc(db, "shared", `proj_${projId}`), { value: JSON.stringify(data) }, { merge: false });
+    };
+    const loadProjectData = async (projId) => {
+      const { db, doc, getDoc } = getFirebase();
+      const snap = await getDoc(doc(db, "shared", `proj_${projId}`));
+      return snap.exists() ? JSON.parse(snap.data().value) : null;
+    };
+    const subscribeProjectData = (projId, callback) => {
+      const { db, doc, onSnapshot } = getFirebase();
+      return onSnapshot(doc(db, "shared", `proj_${projId}`), snap => {
+        try { callback(snap.exists() ? JSON.parse(snap.data().value) : null); } catch(e) {}
+      }, err => console.error("proj sub error", projId, err));
+    };
 
 
     // ── Login Screen ─────────────────────────────────────────────────────────
@@ -936,11 +952,14 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
       return [mainRow, ...c.subItems.map(it => [`  ↳ ${it.description||""}`, "", "", fmt(it.amount), ""])];
     });
     const rowHighlights = allC.flatMap(c => [c.id === newlyRec.id, ...(c.subItems||[]).map(()=>false)]);
-    const _tIntro = `שלום ${projectMeta.tendersManager || ""},\n\nבפרויקט ${projectMeta.name} היועץ ${newlyRec.name} נבחר כמומלץ עבור תחום ${field.fieldName}\nלהלן כל הצעות המחיר:`;
+    const _tendersMgr = (managers||[]).find(m => m.role === "tenders");
+    const _tendersName  = projectMeta.tendersManager  || _tendersMgr?.name  || "";
+    const _tendersEmail = projectMeta.tendersManagerEmail || _tendersMgr?.email || "";
+    const _tIntro = `שלום ${_tendersName || ""},\n\nבפרויקט ${projectMeta.name} היועץ ${newlyRec.name} נבחר כמומלץ עבור תחום ${field.fieldName}\nלהלן כל הצעות המחיר:`;
     const _tOutro = `יש להעביר את ההמלצה למזמין לאישור.${_utilWarn1}\n\nבברכה,\nמערכת CostPilot`;
     const body = `${_tIntro}\n\n${_tOutro}`;
     const htmlBody = buildEmailHtml(_tIntro, ["יועץ", "סוג תשלום", "ערך", "סכום ", "הערות"], tableRows.length > 0 ? tableRows : [["—","","","",""]], _tOutro, rowHighlights);
-    setApprovalModal({ toEmail: projectMeta.tendersManagerEmail||"", toName: projectMeta.tendersManager, subject, body, htmlBody });
+    setApprovalModal({ toEmail: _tendersEmail, toName: _tendersName, subject, body, htmlBody });
   };
 
   const updateFieldName = (fieldId, name) => {
@@ -2337,30 +2356,21 @@ function ConsultantsTab({ rows, setRows, quotesRows, budgetState, statsRows, ope
   const exportToExcel = () => {
     const dataRows = [];
     rows.forEach(r => {
-      const enr = enrich(r);
-      const increases = r.increases || [];
-      const totalInc   = increases.filter(x => x.approvedIncrease).reduce((s,x) => s+Number(x.amount||0), 0);
-      const pendingInc = increases.filter(x => !x.approvedIncrease).reduce((s,x) => s+Number(x.amount||0), 0);
       const sm = (suppliers||[]).find(s => s.name === r.name);
       const cts = r.contacts?.length > 0
         ? r.contacts.map(c => ({ name: c.name||c.contact||"", phone: c.phone||"", phone2: c.phone2||"", email: c.email||"" }))
         : sm?.contacts?.length > 0
           ? sm.contacts.map(c => ({ name: c.contact||"", phone: c.phone||"", phone2: c.phone2||"", email: c.email||"" }))
           : [{ name: r.contact||"", phone: r.phone||"", phone2: r.phone2||"", email: r.email||"" }];
-      cts.forEach((ct, i) => {
+      cts.forEach(ct => {
         dataRows.push([
           r.role||"", r.name||"",
-          i===0 ? (enr._liveFee||"") : "",
-          i===0 ? (totalInc||"") : "",
-          i===0 ? (pendingInc||"") : "",
-          ct.name||"",
-          ct.phone||"", ct.phone2||"", ct.email||"",
-          i===0 ? (r.exportNotes||"") : "",
+          ct.name||"", ct.phone||"", ct.phone2||"", ct.email||"",
         ]);
       });
     });
     const esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    const headers = ["תחום","שם משרד / יועץ","שכ\"ט","הגדלות מאושרות","הגדלות לאישור","שם איש קשר","טלפון","נייד","מייל","הערות"];
+    const headers = ["תחום","שם משרד / יועץ","שם איש קשר","טלפון","נייד","מייל"];
     const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="UTF-8"/>
 <xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
@@ -2369,7 +2379,7 @@ function ConsultantsTab({ rows, setRows, quotesRows, budgetState, statsRows, ope
 </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml>
 </head><body>
 <table dir="rtl" style="border-collapse:collapse;font-family:Arial;font-size:13px;">
-<tr><td colspan="10" style="font-size:15px;font-weight:bold;padding:8px 10px;background:#EAF1FA;border:1px solid #B8CEED;">${esc(projectName||"פרויקט")}</td></tr>
+<tr><td colspan="6" style="font-size:15px;font-weight:bold;padding:8px 10px;background:#EAF1FA;border:1px solid #B8CEED;">${esc(projectName||"פרויקט")}</td></tr>
 <tr>${headers.map(h=>`<th style="background:#163356;color:#fff;font-weight:bold;padding:7px 10px;border:1px solid #0B1F3A;">${esc(h)}</th>`).join("")}</tr>
 ${dataRows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#FAFBFC"}">${row.map(v=>`<td style="border:1px solid #E2E5EA;padding:6px 10px;">${esc(v)}</td>`).join("")}</tr>`).join("")}
 </table></body></html>`;
@@ -2462,7 +2472,7 @@ ${dataRows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#FAFBFC"}">${ro
                       <td style={{ padding:"10px 12px", color:"#3A3A3A" }}>{ct.name||dash}</td>
                       <td style={{ padding:"10px 12px", color:"#3A3A3A", direction:"ltr", textAlign:"right" }}>{ct.phone||dash}</td>
                       <td style={{ padding:"10px 12px", color:"#3A3A3A", direction:"ltr", textAlign:"right" }}>{ct.phone2||dash}</td>
-                      <td style={{ padding:"10px 12px", color:"#3A3A3A" }}>{ct.email||dash}</td>
+                      <td style={{ padding:"10px 12px" }} onClick={e => ct.email && e.stopPropagation()}>{ct.email ? <a href={`mailto:${ct.email}`} style={{ color:"#163356", textDecoration:"underline" }}>{ct.email}</a> : dash}</td>
                     </tr>
                   );
                 })}
@@ -3607,6 +3617,7 @@ function buildBudgetAllRows({ quotesRows, consultantsRows, budgetState, statsRow
       const consultantEntry = (consultantsRows || []).find(r => r.id === "q-"+c.id);
       const approvedIncs = (consultantEntry?.increases || []).filter(x => x.approvedIncrease);
       const totalInc    = approvedIncs.reduce((s,x) => s + Number(x.amount||0), 0);
+      const pendingInc  = (consultantEntry?.increases || []).filter(x => !x.approvedIncrease).reduce((s,x) => s + Number(x.amount||0), 0);
       const approvedIncIds = new Set(approvedIncs.map(x => "i-"+x.id));
       const computedFee = (c.subItems && c.subItems.length > 0)
         ? c.subItems.reduce((s,it)=>s+Number(it.amount||0),0)
@@ -3618,7 +3629,7 @@ function buildBudgetAllRows({ quotesRows, consultantsRows, budgetState, statsRow
       rows.push({
         field: fg.fieldName || "", name: c.name.trim(),
         payType: c.payType || "אחוזים", value: Number(c.value||0),
-        increases: totalInc, computedFee, paid, planOnly, noClaims, notes,
+        increases: totalInc, pendingInc, computedFee, paid, planOnly, noClaims, notes,
         _consultantRowId: "q-"+c.id,
       });
     });
@@ -3933,26 +3944,28 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
         <div style={{ overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, tableLayout:"fixed" }}>
             <colgroup>
-              <col style={{ width:"14%" }} />
-              <col style={{ width:"16%" }} />
-              <col style={{ width:"12%" }} />
+              <col style={{ width:"13%" }} />
+              <col style={{ width:"15%" }} />
               <col style={{ width:"11%" }} />
+              <col style={{ width:"10%" }} />
+              <col style={{ width:"10%" }} />
+              <col style={{ width:"10%" }} />
               <col style={{ width:"11%" }} />
-              <col style={{ width:"12%" }} />
               <col style={{ width:"7%"  }} />
-              <col style={{ width:"17%" }} />
+              <col style={{ width:"13%" }} />
             </colgroup>
             <thead>
               <tr style={{ background:"#F7F8FA", borderBottom:"2px solid #E2E5EA" }}>
                 {[
-                  { h:"שם המקצוע",        w:"14%" },
-                  { h:"שם היועץ / תיאור", w:"16%" },
-                  { h:"סכום\nהתקשרות",   w:"12%" },
-                  { h:"סכום\nמצטבר",     w:"11%" },
-                  { h:"יתרה\nלתשלום",    w:"11%" },
-                  { h:"סכום התקשרות\nלשלב התכנון", w:"12%" },
+                  { h:"שם המקצוע",        w:"13%" },
+                  { h:"שם היועץ / תיאור", w:"15%" },
+                  { h:"סכום\nהתקשרות",   w:"11%" },
+                  { h:"הגדלות\nלאישור",  w:"10%" },
+                  { h:"סכום\nמצטבר",     w:"10%" },
+                  { h:"יתרה\nלתשלום",    w:"10%" },
+                  { h:"סכום התקשרות\nלשלב התכנון", w:"11%" },
                   { h:"העדר\nתביעות",    w:"7%"  },
-                  { h:"הערות",            w:"17%" },
+                  { h:"הערות",            w:"13%" },
                 ].map(({h,w}) => (
                   <th key={h} style={{ padding:"8px 10px", textAlign:"right", color:"#767676", fontWeight:700, fontSize:11, whiteSpace:"pre-line", width:w, minWidth:w, lineHeight:1.3 }}>{h}</th>
                 ))}
@@ -3960,11 +3973,11 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
             </thead>
             <tbody>
               {allRows.length === 0 && (
-                <tr><td colSpan={9} style={{ padding:"16px 32px", textAlign:"right", color:"#9A9A9A" }}>אשר יועצים בלשונית "הצעות מחיר יועצים" כדי לראות את תקציב הפרויקט</td></tr>
+                <tr><td colSpan={10} style={{ padding:"16px 32px", textAlign:"right", color:"#9A9A9A" }}>אשר יועצים בלשונית "הצעות מחיר יועצים" כדי לראות את תקציב הפרויקט</td></tr>
               )}
               {allRows.length > 0 && (<>
                 <tr style={{ background:"#EAF1FA", borderTop:"2px solid #B8CEED" }}>
-                  <td colSpan={9} style={{ padding:"8px 14px", fontWeight:800, color:"#163356", fontSize:13 }}>יועצים</td>
+                  <td colSpan={10} style={{ padding:"8px 14px", fontWeight:800, color:"#163356", fontSize:13 }}>יועצים</td>
                 </tr>
                 {allRows.map((r,i) => {
                 const mIS = { width:"100%", fontSize:12, border:"1px solid #E2E5EA", borderRadius:4, padding:"5px 8px", fontFamily:"'Heebo',sans-serif", background:"transparent", outline:"none", direction:"rtl" };
@@ -3986,6 +3999,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                       <td style={{ padding:"5px 6px" }}>
                         <BudgetNumInput value={orig.contract||""} onChange={v=>updExtraConsultant(r._manualId,"contract",v)} />
                       </td>
+                      <td style={{ padding:"10px 10px", color:"#9A9A9A", textAlign:"right" }}>—</td>
                       <td style={{ padding:"5px 6px" }}>
                         <BudgetNumInput value={orig.paid||""} onChange={v=>updExtraConsultant(r._manualId,"paid",v)} />
                       </td>
@@ -4029,6 +4043,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                       onClick={() => setBudgetOpenConsultantId(r._consultantRowId)}>{r.field}</td>
                     <td style={{ padding:"10px 10px", color:"#0D0D0D", fontWeight:400, whiteSpace:"nowrap", maxWidth:140, overflow:"hidden", textOverflow:"ellipsis", textAlign:"right" }}>{r.name}</td>
                     <td style={{ padding:"10px 10px", fontWeight:400, color:"#0D0D0D", textAlign:"right" }}>{feeLabel}</td>
+                    <td style={{ padding:"10px 10px", color: (r.pendingInc||0) > 0 ? "#5C3D10" : "#9A9A9A", fontWeight:400, textAlign:"right" }}>{(r.pendingInc||0) > 0 ? fmt(r.pendingInc) : "—"}</td>
                     <td style={{ padding:"10px 10px", color:"#0D0D0D", fontWeight:400, textAlign:"right" }}>{fmt(r.paid||0)}</td>
                     <td style={{ padding:"10px 10px", color: noBase?"#9A9A9A": r.noClaims ? "#9A9A9A" : remaining2 < 0 ? "#5C2020" : "#0D0D0D", fontWeight:400,
                       textDecoration: r.noClaims ? "line-through" : "none",
@@ -4056,7 +4071,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                 })}
               </>)}
               <tr>
-                <td colSpan={9} style={{ padding:"5px 14px" }}>
+                <td colSpan={10} style={{ padding:"5px 14px" }}>
                   <button onClick={addExtraConsultant}
                     style={{ background:"#FAF2E6", color:"#5C3D10", border:"1px solid #F0D4B0", borderRadius:4, padding:"4px 12px", fontSize:11, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>
                     + הוסף שורה ידנית
@@ -4070,6 +4085,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                   <td style={{ padding:"8px 10px", fontWeight:800, color:"#163356", fontSize:12, textAlign:"right" }}>סה״כ יועצים</td>
                   <td style={{ padding:"8px 10px", color:"#9A9A9A", fontSize:12, textAlign:"right" }}>{allRows.length} יועצים</td>
                   <td style={{ padding:"8px 10px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmt(consultantsTotal)}</td>
+                  <td style={{ padding:"8px 10px", fontWeight:800, color:"#5C3D10", textAlign:"right" }}>{fmt(allRows.reduce((s,r)=>s+(r.pendingInc||0),0))}</td>
                   <td style={{ padding:"8px 10px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmt(allRows.reduce((s,r)=>s+(r.paid||0),0))}</td>
                   <td style={{ padding:"8px 10px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmt(allRows.reduce((s,r)=>{
                     if (r.noClaims) return s;
@@ -4099,7 +4115,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                   const inputStyle = { width:"100%", fontSize:12, border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 7px", fontFamily:"'Heebo',sans-serif", background:"transparent", outline:"none", textAlign:"right" };
                   return (<>
                     <tr style={{ background:"#FAF2E6", borderTop:"2px solid #F0D4B0" }}>
-                      <td colSpan={9} style={{ padding:"8px 14px", fontWeight:800, color:"#5C3D10", fontSize:13 }}>אגרות</td>
+                      <td colSpan={10} style={{ padding:"8px 14px", fontWeight:800, color:"#5C3D10", fontSize:13 }}>אגרות</td>
                     </tr>
                     {allFeeRows.map((r, i) => {
                       const isExtra = i >= FIXED_FEES.length;
@@ -4113,6 +4129,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                               : <span style={{ fontSize:13, color:"#0D0D0D" }}>{r.name}</span>}
                           </td>
                           <td style={{ padding:"7px 10px" }}><BudgetNumInput value={r.contract||""} onChange={v=>updFeeRow(r.id,"contract",v,isExtra)} /></td>
+                          <td style={{ padding:"7px 10px", color:"#9A9A9A", textAlign:"right" }}>—</td>
                           <td style={{ padding:"7px 10px" }}><BudgetNumInput value={r.paid||""} onChange={v=>updFeeRow(r.id,"paid",v,isExtra)} /></td>
                           <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color: rem<0?"#5C2020":"#0D0D0D", textDecoration:r.noClaims?"line-through":"none" }}>{fmt(rem)}</td>
                           <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:"#0D0D0D" }}>{fmt(Number(r.contract||0))}</td>
@@ -4124,7 +4141,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                       );
                     })}
                     <tr>
-                      <td colSpan={9} style={{ padding:"5px 14px" }}>
+                      <td colSpan={10} style={{ padding:"5px 14px" }}>
                         <button onClick={()=>upd("extraFeeRows",[...(bs.extraFeeRows||[]),{id:Date.now(),name:"",contract:"",paid:"",planOnly:"",noClaims:false,notes:""}])}
                           style={{ background:"#FAF2E6", color:"#5C3D10", border:"1px solid #F0D4B0", borderRadius:4, padding:"4px 10px", fontSize:11, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>+ הוסף אגרה</button>
                       </td>
@@ -4132,6 +4149,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                     <tr style={{ borderTop:"2px solid #F0D4B0" }}>
                       <td colSpan={2} style={{ padding:"8px 10px", fontWeight:800, color:"#5C3D10", fontSize:12 }}>סה״כ אגרות</td>
                       <td style={{ padding:"8px 10px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmt(feeTotalContract)}</td>
+                      <td />
                       <td style={{ padding:"8px 10px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmt(feeTotalPaid)}</td>
                       <td style={{ padding:"8px 10px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmt(feeTotalRemaining)}</td>
                       <td style={{ padding:"8px 10px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmt(feeTotalContract)}</td>
@@ -4157,7 +4175,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                       const contractorRem      = contractorContract - contractorPaid;
                       return (<>
                         <tr style={{ background:"#EFF7F3", borderTop:"2px solid #C6E8D4" }}>
-                          <td colSpan={9} style={{ padding:"8px 14px", fontWeight:800, color:"#1C4532", fontSize:13 }}>קבלן</td>
+                          <td colSpan={10} style={{ padding:"8px 14px", fontWeight:800, color:"#1C4532", fontSize:13 }}>קבלן</td>
                         </tr>
                         {allContractorRows.map((r,i) => {
                           const rem = Number(r.contract||0) - Number(r.paid||0);
@@ -4172,6 +4190,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                                   : <input value={r.name} onChange={e=>updContractorRow(r.id,"name",e.target.value)} style={inputStyle} placeholder="שם הקבלן..." />}
                               </td>
                               <td style={{ padding:"7px 10px" }}><BudgetNumInput value={r.contract} onChange={v=>updContractorRow(r.id,"contract",v)} /></td>
+                              <td style={{ padding:"7px 10px", color:"#9A9A9A", textAlign:"right" }}>—</td>
                               <td style={{ padding:"7px 10px" }}><BudgetNumInput value={r.paid} onChange={v=>updContractorRow(r.id,"paid",v)} /></td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:rem<0?"#5C2020":"#0D0D0D" }}>{fmt(rem)}</td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:"#9A9A9A" }}>—</td>
@@ -4187,7 +4206,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                           );
                         })}
                         <tr>
-                          <td colSpan={9} style={{ padding:"5px 14px" }}>
+                          <td colSpan={10} style={{ padding:"5px 14px" }}>
                             <button onClick={()=>upd("extraContractorRows",[...extraContractorRows,{id:Date.now(),name:"",contract:"",paid:"",notes:""}])}
                               style={{ background:"#EFF7F3", color:"#1C4532", border:"1px solid #C6E8D4", borderRadius:4, padding:"4px 10px", fontSize:11, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600 }}>+ הוסף קבלן</button>
                           </td>
@@ -4195,6 +4214,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                         <tr style={{ borderTop:"2px solid #C6E8D4" }}>
                           <td colSpan={2} style={{ padding:"8px 10px", fontWeight:800, color:"#1C4532", fontSize:12 }}>סה״כ קבלן</td>
                           <td style={{ padding:"8px 10px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmt(contractorContract)}</td>
+                          <td />
                           <td style={{ padding:"8px 10px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmt(contractorPaid)}</td>
                           <td style={{ padding:"8px 10px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmt(contractorRem)}</td>
                           <td style={{ padding:"8px 10px", color:"#9A9A9A", textAlign:"right" }}>—</td>
@@ -4233,7 +4253,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                           const grandTotalRem = grandTotalContract - grandTotalPaid;
                           return (<>
                             <tr style={{ background:"#F0F2F5", borderTop:"2px solid #D0D5DD" }}>
-                              <td colSpan={9} style={{ padding:"8px 14px", fontWeight:800, color:"#444444", fontSize:13 }}>תקורות</td>
+                              <td colSpan={10} style={{ padding:"8px 14px", fontWeight:800, color:"#444444", fontSize:13 }}>תקורות</td>
                             </tr>
                             {/* תקורות חברה עירונית */}
                             <tr style={{ borderBottom:"1px solid #F0F2F5" }}>
@@ -4254,6 +4274,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                                 </div>
                               </td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:"#0D0D0D", fontWeight:600 }}>{fmt(overheadAmt)}</td>
+                              <td style={{ padding:"7px 10px", color:"#9A9A9A", textAlign:"right" }}>—</td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:"#0D0D0D" }}>
                                 {overheadMode==="fixed"
                                   ? <input type="number" value={bs.overheadPaidFixed||""} onChange={e=>upd("overheadPaidFixed",e.target.value)} style={{...inputStyle, width:"100%", textAlign:"right"}} placeholder="0" />
@@ -4278,6 +4299,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                                 </div>
                               </td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:"#0D0D0D", fontWeight:600 }}>{fmt(bcmAmt)}</td>
+                              <td style={{ padding:"7px 10px", color:"#9A9A9A", textAlign:"right" }}>—</td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:"#0D0D0D" }}>{fmt(bcmPaid)}</td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:bcmRem<0?"#5C2020":"#0D0D0D" }}>{fmt(bcmRem)}</td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:"#0D0D0D" }}>{bcmPlanOnlyCalc > 0 ? fmt(Math.round(bcmPlanOnlyCalc)) : "—"}</td>
@@ -4294,6 +4316,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                                 </div>
                               </td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:"#0D0D0D", fontWeight:600 }}>{fmt(vatAmt)}</td>
+                              <td style={{ padding:"7px 10px", color:"#9A9A9A", textAlign:"right" }}>—</td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:"#0D0D0D" }}>{fmt(vatPaid)}</td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:vatRem<0?"#5C2020":"#0D0D0D" }}>{fmt(vatRem)}</td>
                               <td style={{ padding:"7px 10px", textAlign:"right", fontSize:13, color:"#0D0D0D" }}>{vatPlanOnlyCalc > 0 ? fmt(Math.round(vatPlanOnlyCalc)) : "—"}</td>
@@ -4304,6 +4327,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                             <tr style={{ borderTop:"2px solid #D0D5DD" }}>
                               <td colSpan={2} style={{ padding:"8px 10px", fontWeight:800, color:"#444444", fontSize:12 }}>סה״כ תקורות</td>
                               <td style={{ padding:"8px 10px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmt(overheadTotalAmt)}</td>
+                              <td />
                               <td style={{ padding:"8px 10px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmt(overheadPaid+bcmPaid+vatPaid)}</td>
                               <td style={{ padding:"8px 10px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmt(overheadRem+bcmRem+vatRem)}</td>
                               <td style={{ padding:"8px 10px", fontWeight:800, color:"#0D0D0D", textAlign:"right" }}>{fmt(Math.round(overheadPlanOnlyCalc+bcmPlanOnlyCalc+vatPlanOnlyCalc))}</td>
@@ -4313,6 +4337,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
                             <tr style={{ background:"#FAF2E6", borderTop:"3px solid #5C3D10" }}>
                               <td colSpan={2} style={{ padding:"11px 10px", fontWeight:900, color:"#5C3D10", fontSize:14 }}>סה״כ כללי</td>
                               <td style={{ padding:"11px 10px", fontWeight:900, color:"#5C3D10", fontSize:14, textAlign:"right" }}>{fmt(grandTotalContract)}</td>
+                              <td />
                               <td style={{ padding:"11px 10px", fontWeight:900, color:"#5C3D10", fontSize:14, textAlign:"right" }}>{fmt(grandTotalPaid)}</td>
                               <td style={{ padding:"11px 10px", fontWeight:900, color:"#5C3D10", fontSize:14, textAlign:"right" }}>{fmt(grandTotalRem)}</td>
                               <td style={{ padding:"11px 10px", fontWeight:900, color:"#5C3D10", fontSize:14, textAlign:"right" }}>{fmt(Math.round(basePlanOnly + overheadPlanOnlyCalc + bcmPlanOnlyCalc + vatPlanOnlyCalc))}</td>
@@ -5310,11 +5335,12 @@ function CompaniesPage({ companies, setCompanies }) {
 
 // ── Global page: מנהלים ──────────────────────────────────────────────────────
 const MANAGER_ROLES = [
-  { value:"planning",  label:"מנהל תכנון" },
-  { value:"execution", label:"מנהל ביצוע" },
-  { value:"unit",      label:"מנהל יחידה" },
-  { value:"domain",    label:"מנהל תחום"  },
-  { value:"tenders",   label:"מנהל מכרזים" },
+  { value:"planning",    label:"מנהל תכנון" },
+  { value:"execution",   label:"מנהל ביצוע" },
+  { value:"unit",        label:"מנהל יחידה" },
+  { value:"domain",      label:"מנהל תחום"  },
+  { value:"tenders",     label:"מנהל מכרזים" },
+  { value:"accounting",  label:"מנהל/ת חשבונות" },
 ];
 function ManagersPage({ managers, setManagers }) {
   const [form, setForm] = useState({ name:"", role:"planning", email:"", phone:"" });
@@ -5375,7 +5401,7 @@ function ManagersPage({ managers, setManagers }) {
         {managers.length === 0 && (
           <div style={{ padding:32, textAlign:"right", color:"#9A9A9A" }}>אין מנהלים עדיין</div>
         )}
-        {managers.map((m, i) => (
+        {[...managers].sort((a,b) => (a.name||"").localeCompare(b.name||"", "he")).map((m, i) => (
           <div key={m.id} style={{ borderBottom: i<managers.length-1?"1px solid #F0F2F5":"none" }}>
             {editId === m.id ? (
               <div style={{ padding:"14px 20px", background:"#F7F8FA", display:"flex", gap:10, alignItems:"flex-end", flexWrap:"wrap" }}>
@@ -7226,14 +7252,14 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     return tb - ta;
   });
 
-  // real-time sync — מנוי לכל המסמכים המשותפים
+  // real-time sync — מנוי לכל המסמכים המשותפים + per-project docs
   const fsReceived = React.useRef({});
+  const projSubsRef = React.useRef({});
   useEffect(() => {
-    let loadedCount = 0;
-    const KEYS = ["projects","allData","suppliers","companies","milestones","statsRows","workScopes","managers"];
+    let nonProjLoaded = 0;
+    let projDataLoaded = false;
+    const OTHER_KEYS = ["suppliers","companies","milestones","statsRows","workScopes","managers"];
     const setters = {
-      projects:   d => setProjects(d),
-      allData:    d => setAllData(d),
       suppliers:  d => setSuppliers(migrateSuppliers(d)),
       companies:  d => setCompanies(d),
       milestones: d => setMilestones(d),
@@ -7241,19 +7267,76 @@ function AppInner({ currentUser, userRole, setUserRole }) {
       workScopes: d => setWorkScopes(d),
       managers:   d => setManagers(d),
     };
-    const unsubs = KEYS.map(key => subscribeShared(key, async data => {
-      // migration fallback — אם המסמך המשותף ריק, טען מהמפתח הישן
-      if (data === null && key !== "projects" && key !== "allData") {
-        data = await loadFromFirestore(uid, key);
-      }
-      if (data !== null) {
-        fsReceived.current[key] = true;
-        setters[key](data);
-        setTimeout(() => { fsReceived.current[key] = false; }, 200);
-      }
-      if (loadedCount < KEYS.length) { loadedCount++; if (loadedCount === KEYS.length) setDataLoaded(true); }
+    const checkDone = () => {
+      if (nonProjLoaded >= OTHER_KEYS.length && projDataLoaded) setDataLoaded(true);
+    };
+
+    // מנויים למסמכים הכלליים (לא allData)
+    const otherUnsubs = OTHER_KEYS.map(key => subscribeShared(key, async d => {
+      if (d === null) d = await loadFromFirestore(uid, key);
+      if (d !== null) { fsReceived.current[key] = true; setters[key](d); setTimeout(() => { fsReceived.current[key] = false; }, 200); }
+      nonProjLoaded++; checkDone();
     }));
-    return () => unsubs.forEach(u => u());
+
+    // מנוי לרשימת הפרויקטים
+    const projUnsub = subscribeShared("projects", async data => {
+      if (data === null) data = [];
+      fsReceived.current["projects"] = true;
+      setProjects(data);
+      setTimeout(() => { fsReceived.current["projects"] = false; }, 200);
+
+      // טיפול בפרויקטים חדשים — גם בטעינה ראשונה וגם בעדכונים עתידיים
+      const newProjects = data.filter(p => !projSubsRef.current[p.id]);
+
+      if (!projDataLoaded) {
+        projDataLoaded = true;
+        // טעינת נתוני כל פרויקט בנפרד (עם fallback ל-allData הישן)
+        const oldData_ref = { value: null };
+        const combined = {};
+        await Promise.all(data.map(async p => {
+          let d = await loadProjectData(p.id);
+          if (d === null) {
+            // מיגרציה מ-shared/allData
+            if (oldData_ref.value === null) {
+              const { db, doc, getDoc } = getFirebase();
+              const s = await getDoc(doc(db, "shared", "allData"));
+              oldData_ref.value = s.exists() ? JSON.parse(s.data().value) : {};
+            }
+            d = oldData_ref.value[p.id] || makeProjectData();
+            saveProjectData(p.id, d); // שמור במבנה החדש
+          }
+          combined[String(p.id)] = d;
+        }));
+        setAllData(combined);
+        checkDone();
+      } else if (newProjects.length > 0) {
+        // פרויקטים חדשים שנוספו אחרי הטעינה הראשונית — טען אותם
+        const additions = {};
+        await Promise.all(newProjects.map(async p => {
+          const d = await loadProjectData(p.id);
+          additions[String(p.id)] = d || makeProjectData();
+        }));
+        setAllData(prev => ({ ...prev, ...additions }));
+      }
+
+      // הירשם לעדכונים real-time לפרויקטים חדשים
+      newProjects.forEach(p => {
+        projSubsRef.current[p.id] = subscribeProjectData(p.id, newD => {
+          if (newD !== null) {
+            fsReceived.current["allData"] = true;
+            setAllData(prev => ({ ...prev, [p.id]: newD }));
+            setTimeout(() => { fsReceived.current["allData"] = false; }, 200);
+          }
+        });
+      });
+    });
+
+    return () => {
+      otherUnsubs.forEach(u => u && u());
+      projUnsub && projUnsub();
+      Object.values(projSubsRef.current).forEach(u => u && u());
+      projSubsRef.current = {};
+    };
   }, [uid]);
 
   const [selectedProj, setSelectedProj] = useState(null);
@@ -7265,6 +7348,8 @@ function AppInner({ currentUser, userRole, setUserRole }) {
   const [openInvoiceId, setOpenInvoiceId] = useState(null);
   const [showModal,    setShowModal]    = useState(false);
   const [projSearch,        setProjSearch]        = useState("");
+  const [sidebarSearch,     setSidebarSearch]     = useState("");
+  const [showSettings,      setShowSettings]      = useState(false);
   const [projStatusFilters, setProjStatusFilters] = useState([]);
   const [showStatusDrop,   setShowStatusDrop]   = useState(false);
   const statusDropRef = React.useRef(null);
@@ -7350,7 +7435,16 @@ function AppInner({ currentUser, userRole, setUserRole }) {
 
   // Auto-save to Firestore - must be before any early return
   useEffect(() => { if (dataLoaded && !fsReceived.current["projects"]) saveToFirestore(uid, "projects", projects); }, [projects, dataLoaded]);
-  useEffect(() => { if (dataLoaded && !fsReceived.current["allData"]) saveToFirestore(uid, "allData", allData); }, [allData, dataLoaded]);
+  const prevAllDataRef = React.useRef(null);
+  useEffect(() => {
+    if (!dataLoaded || fsReceived.current["allData"]) return;
+    const prev = prevAllDataRef.current;
+    prevAllDataRef.current = allData;
+    if (prev === null) return;
+    Object.keys(allData).forEach(id => {
+      if (allData[id] !== prev[id]) saveProjectData(id, allData[id]);
+    });
+  }, [allData, dataLoaded]);
 
   if (!dataLoaded) return (
     <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Heebo',sans-serif", color:"#9A9A9A", fontSize:16 }}>
@@ -7362,15 +7456,24 @@ function AppInner({ currentUser, userRole, setUserRole }) {
   const addProject = () => {
     if (!newPForm.name.trim()) return;
     const p = { ...newPForm, id: Date.now(), status:"", createdAt: Date.now() };
+    const newProjData = { ...makeProjectData(), companyId: newPForm.companyId||"" };
     setProjects(prev => {
       const updated = [...prev, p];
       saveProjects(updated);
       return updated;
     });
     setAllData(prev => {
-      const updated = { ...prev, [p.id]: { ...makeProjectData(), companyId: newPForm.companyId||"" } };
+      const updated = { ...prev, [p.id]: newProjData };
       saveAllData(updated);
       return updated;
+    });
+    saveProjectData(p.id, newProjData);
+    projSubsRef.current[p.id] = subscribeProjectData(p.id, newD => {
+      if (newD !== null) {
+        fsReceived.current["allData"] = true;
+        setAllData(prev => ({ ...prev, [p.id]: newD }));
+        setTimeout(() => { fsReceived.current["allData"] = false; }, 200);
+      }
     });
     setNewPForm({ name:"", companyId:"", year:new Date().getFullYear() });
     setShowModal(false);
@@ -7380,6 +7483,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
   const deleteProject = id => {
     setProjects(prev => { const u = prev.filter(p => p.id !== id); saveProjects(u); return u; });
     setAllData(prev => { const u = {...prev}; delete u[id]; saveAllData(u); return u; });
+    if (projSubsRef.current[id]) { projSubsRef.current[id](); delete projSubsRef.current[id]; }
     if (selectedProj?.id === id) setSelectedProj(null);
   };
 
@@ -7967,27 +8071,61 @@ function AppInner({ currentUser, userRole, setUserRole }) {
         {/* Global nav items */}
         <div style={{ padding:"12px 10px 4px", display:"flex", flexDirection:"column", gap:2 }}>
           {[
-            { label:"לוח בקרה",          icon:"📊", action:()=>{ setGlobalPage("dashboard"); setSelectedProj(null); setShowStats(false); }, active: !selectedProj && globalPage==="dashboard" },
-            { label:"פרויקטים",           icon:"📁", action:()=>{ setSelectedProj(null); setGlobalPage(null); setShowStats(false); },          active: !selectedProj && !globalPage && !showStats },
-            { label:"מידע ראשי",          icon:"📋", action:()=>{ setGlobalPage("maininfo"); setSelectedProj(null); setShowStats(false); },   active: globalPage==="maininfo" },
-            { label:"רשימת ספקים",        icon:"🗂️", action:()=>{ setGlobalPage("suppliers"); setSelectedProj(null); setShowStats(false); },  active: globalPage==="suppliers" },
-            { label:"חברות עירוניות",     icon:"🏛️", action:()=>{ setGlobalPage("companies"); setSelectedProj(null); setShowStats(false); },  active: globalPage==="companies" },
-            { label:"מנהלים",             icon:"👔", action:()=>{ setGlobalPage("managers"); setSelectedProj(null); setShowStats(false); },   active: globalPage==="managers" },
-            { label:"תבניות אבני דרך",    icon:"🚩", action:()=>{ setGlobalPage("milestones"); setSelectedProj(null); setShowStats(false); }, active: globalPage==="milestones" },
-            { label:"גיליון סטטיסטיקה",   icon:"📈", action:()=>{ setShowStats(true); setSelectedProj(null); setGlobalPage(null); },          active: showStats },
-            { label:"השוואת עלויות",      icon:"⚖️", action:()=>{ setGlobalPage("costs"); setSelectedProj(null); setShowStats(false); },       active: globalPage==="costs" },
-          ].map(({label, icon, action, active, big}) => (
+            { label:"לוח בקרה",      icon:"📊", action:()=>{ setGlobalPage("dashboard"); setSelectedProj(null); setShowStats(false); }, active: !selectedProj && globalPage==="dashboard" },
+            { label:"פרויקטים",      icon:"📁", action:()=>{ setSelectedProj(null); setGlobalPage(null); setShowStats(false); },       active: !selectedProj && !globalPage && !showStats },
+            { label:"מידע ראשי",     icon:"📋", action:()=>{ setGlobalPage("maininfo"); setSelectedProj(null); setShowStats(false); }, active: globalPage==="maininfo" },
+            { label:"רשימת ספקים",   icon:"🗂️", action:()=>{ setGlobalPage("suppliers"); setSelectedProj(null); setShowStats(false); }, active: globalPage==="suppliers" },
+            { label:"השוואת עלויות", icon:"⚖️", action:()=>{ setGlobalPage("costs"); setSelectedProj(null); setShowStats(false); },   active: globalPage==="costs" },
+          ].map(({label, icon, action, active}) => (
             <div key={label} className="hov-side" onClick={action}
               style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 12px", borderRadius:0, cursor:"pointer",
-                fontSize: 13, fontWeight: active?600:400,
-                color: active?"#0B1F3A":"#767676",
-                background: active?"#EAF1FA":"transparent",
-                borderRight: active?"2px solid #0E7C6A":"2px solid transparent",
+                fontSize:13, fontWeight:active?600:400,
+                color:active?"#0B1F3A":"#767676",
+                background:active?"#EAF1FA":"transparent",
+                borderRight:active?"2px solid #0E7C6A":"2px solid transparent",
                 borderLeft:"none", borderTop:"none", borderBottom:"none",
                 transition:"all .15s" }}>
-              <span style={{ fontSize: 16 }}>{icon}</span> {label}
+              <span style={{ fontSize:16 }}>{icon}</span> {label}
             </div>
           ))}
+
+          {/* הגדרות — מתקפל */}
+          {(() => {
+            const settingsActive = ["companies","managers","milestones","users"].includes(globalPage) || showStats;
+            return (<>
+              <div className="hov-side" onClick={() => setShowSettings(v => !v)}
+                style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", borderRadius:0, cursor:"pointer",
+                  fontSize:13, fontWeight:settingsActive?600:400,
+                  color:settingsActive?"#0B1F3A":"#767676",
+                  background:settingsActive?"#EAF1FA":"transparent",
+                  borderRight:settingsActive?"2px solid #0E7C6A":"2px solid transparent",
+                  borderLeft:"none", borderTop:"none", borderBottom:"none",
+                  transition:"all .15s" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+                  <span style={{ fontSize:16 }}>⚙️</span> הגדרות
+                </div>
+                <span style={{ fontSize:11, color:"#9A9A9A" }}>{showSettings ? "▴" : "▾"}</span>
+              </div>
+              {showSettings && [
+                { label:"חברות עירוניות",  icon:"🏛️", action:()=>{ setGlobalPage("companies");  setSelectedProj(null); setShowStats(false); }, active: globalPage==="companies" },
+                { label:"מנהלים",          icon:"👔", action:()=>{ setGlobalPage("managers");   setSelectedProj(null); setShowStats(false); }, active: globalPage==="managers" },
+                { label:"תבניות אבני דרך", icon:"🚩", action:()=>{ setGlobalPage("milestones"); setSelectedProj(null); setShowStats(false); }, active: globalPage==="milestones" },
+                { label:"גיליון סטטיסטיקה",icon:"📈", action:()=>{ setShowStats(true); setSelectedProj(null); setGlobalPage(null); },          active: showStats },
+                ...(isAdmin ? [{ label:"ניהול משתמשים", icon:"👥", action:()=>{ setGlobalPage("users"); setSelectedProj(null); setShowStats(false); }, active: globalPage==="users" }] : []),
+              ].map(({label, icon, action, active}) => (
+                <div key={label} className="hov-side" onClick={action}
+                  style={{ display:"flex", alignItems:"center", gap:9, padding:"7px 12px 7px 26px", borderRadius:0, cursor:"pointer",
+                    fontSize:12, fontWeight:active?600:400,
+                    color:active?"#0B1F3A":"#767676",
+                    background:active?"#EAF1FA":"transparent",
+                    borderRight:active?"2px solid #0E7C6A":"2px solid transparent",
+                    borderLeft:"none", borderTop:"none", borderBottom:"none",
+                    transition:"all .15s" }}>
+                  <span style={{ fontSize:14 }}>{icon}</span> {label}
+                </div>
+              ))}
+            </>);
+          })()}
         </div>
 
         {/* User info + logout */}
@@ -8001,24 +8139,19 @@ function AppInner({ currentUser, userRole, setUserRole }) {
             יציאה
           </button>
         </div>
-        {/* ניהול משתמשים — מנהל בלבד */}
-        {isAdmin && (
-          <div onClick={() => { setGlobalPage("users"); setSelectedProj(null); }}
-            style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 12px", borderRadius:0, cursor:"pointer", fontSize:13,
-              fontWeight:globalPage==="users"?600:400,
-              color:globalPage==="users"?"#0B1F3A":"#767676",
-              background:globalPage==="users"?"#EAF1FA":"transparent",
-              borderRight:globalPage==="users"?"2px solid #0E7C6A":"2px solid transparent",
-              borderLeft:"none", borderTop:"none", borderBottom:"none",
-              margin:"4px 8px 0" }}>
-            <span style={{ fontSize:16 }}>👥</span> ניהול משתמשים
-          </div>
-        )}
 
         {/* Project list */}
         <div style={{ flex:1, overflowY:"auto", padding:"4px 10px 10px" }}>
           <div style={{ fontSize:10, color:"#9A9A9A", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase", padding:"10px 8px 4px" }}>רשימת פרויקטים</div>
-          {sortedVisibleProjects.map(p => (
+          <div style={{ position:"relative", marginBottom:6 }}>
+            <span style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", color:"#9A9A9A", fontSize:13, pointerEvents:"none" }}>🔍</span>
+            <input value={sidebarSearch} onChange={e => setSidebarSearch(e.target.value)}
+              placeholder="חיפוש פרויקט..."
+              style={{ width:"100%", padding:"6px 28px 6px 8px", border:"1px solid #E2E5EA", borderRadius:4, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", boxSizing:"border-box", direction:"rtl" }}
+              onFocus={e => e.target.style.borderColor="#0B1F3A"}
+              onBlur={e => e.target.style.borderColor="#E2E5EA"} />
+          </div>
+          {sortedVisibleProjects.filter(p => !sidebarSearch.trim() || p.name.toLowerCase().includes(sidebarSearch.trim().toLowerCase())).map(p => (
             <div key={p.id} className="hov-side"
               onClick={() => { setSelectedProj(p); setActiveTab("budget"); setGlobalPage(null); touchProject(p); }}
               style={{ display:"flex", alignItems:"center", gap:8, padding:"9px 12px", borderRadius:0, cursor:"pointer", marginBottom:0,
@@ -8033,14 +8166,6 @@ function AppInner({ currentUser, userRole, setUserRole }) {
             </div>
           ))}
 
-          {isAdmin && (
-          <button onClick={() => setShowModal(true)}
-            style={{ width:"100%", marginTop:8, padding:"9px 12px", borderRadius:4, border:"1px dashed #D0D5DD", background:"transparent", color:"#767676", fontSize:13, fontFamily:"'Heebo',sans-serif", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontWeight:500 }}
-            onMouseOver={e => { e.currentTarget.style.borderColor="#0B1F3A"; e.currentTarget.style.color="#0B1F3A"; }}
-            onMouseOut={e  => { e.currentTarget.style.borderColor="#D0D5DD"; e.currentTarget.style.color="#767676"; }}>
-            + פרויקט חדש
-          </button>
-          )}
         </div>
 
         <div style={{ padding:"10px 16px", borderTop:"1px solid #E2E5EA", fontSize:11, color:"#9A9A9A", textAlign:"right" }}>
