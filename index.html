@@ -6034,6 +6034,36 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
       return sel.has(getVal(p, fkey));
     }));
 
+  // Cache expensive per-project budget calculations so re-renders don't recompute
+  const projStats = React.useMemo(() => {
+    const out = {};
+    projects.forEach(p => {
+      const d = allData[p.id] || {};
+      const o = d.openingData || {};
+      const cEst = Number(String(o.contractorEst||"").replace(/,/g,"")) || Number(d.budgetState?.contractorEst||0);
+      const _rows = buildBudgetAllRows({ quotesRows:d.quotes||[], consultantsRows:d.consultants||[], budgetState:{...(d.budgetState||{}),contractorEst:cEst}, statsRows, accountsRows:d.accounts||[], planOnlyMap:{}, openingData:o });
+      const consultantsTotal = _rows.reduce((s,r)=>s+(r.payType==="אחוזים"?r.computedFee:r.value)+r.increases, 0);
+      const _finalMeta = (d.contractor||[]).find(r=>r.key==="__meta__");
+      const _finalBoq  = Number(String(_finalMeta?.finalBoq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
+      const _boqMeta   = (d.tender||[]).find(r=>r.key==="__meta__");
+      const _boqVal    = Number(String(_boqMeta?.boq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
+      const _utilBase  = _finalBoq>0?_finalBoq:_boqVal>0?_boqVal:cEst;
+      const utilPct    = _utilBase>0 ? consultantsTotal/_utilBase*100 : null;
+      const _bs = d.budgetState||{};
+      const _feePaid  = [...(_bs.feeRows||[]),...(_bs.extraFeeRows||[])].reduce((s,r)=>s+Number(r.paid||0),0);
+      const _conPaid  = [{paid:_bs.contractorPaid||""},...(_bs.extraContractorRows||[])].reduce((s,r)=>s+Number(r.paid||0),0);
+      const _basePaid = _rows.reduce((s,r)=>s+(r.paid||0),0)+_feePaid+_conPaid;
+      const _ohPaid   = Math.round(_basePaid*Number(_bs.overheadPct||4)/100);
+      const _bcmPaid  = Math.round((_basePaid+_ohPaid)*Number(_bs.bcmPct||0)/100);
+      const _vatPaid  = Math.round((_basePaid+_ohPaid+_bcmPaid)*Number(_bs.vatPct||18)/100);
+      const _grandPaid = _basePaid+_ohPaid+_bcmPaid+_vatPaid;
+      const _received  = (_bs.extraItems||[]).reduce((s,x)=>s+Number(x.amount||0),0);
+      const budgetUtilPct = _received>0 ? _grandPaid/_received*100 : null;
+      out[p.id] = { utilPct, budgetUtilPct };
+    });
+    return out;
+  }, [allData, projects, statsRows]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const searchLower = searchQuery.trim().toLowerCase();
   const filteredProjects = projects.filter(p => {
     if (!cols.every(({fkey}) => {
@@ -6137,27 +6167,9 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
       const d = allData[p.id] || {};
       const o = d.openingData || {};
       const company = companies.find(c => String(c.id) === String(d.companyId));
-      const cEst = Number(String(o.contractorEst||"").replace(/,/g,"")) || Number(d.budgetState?.contractorEst||0);
-      const _allRowsX = buildBudgetAllRows({ quotesRows: d.quotes||[], consultantsRows: d.consultants||[], budgetState: { ...(d.budgetState||{}), contractorEst: cEst }, statsRows, accountsRows: d.accounts||[], planOnlyMap:{}, openingData: o });
-      const consultantsTotal = _allRowsX.reduce((s,r) => s + (r.payType==="אחוזים" ? r.computedFee : r.value) + r.increases, 0);
-      const _finalMetaX = (d.contractor||[]).find(r=>r.key==="__meta__");
-      const _finalBoqX  = Number(String(_finalMetaX?.finalBoq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
-      const _boqMetaX = (d.tender||[]).find(r=>r.key==="__meta__");
-      const _boqValX  = Number(String(_boqMetaX?.boq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
-      const _utilBaseX = _finalBoqX > 0 ? _finalBoqX : _boqValX > 0 ? _boqValX : cEst;
-      const utilPct = _utilBaseX > 0 ? consultantsTotal / _utilBaseX * 100 : null;
-      const _bs = d.budgetState || {};
-      const _feePaid  = [...(_bs.feeRows||[]),...(_bs.extraFeeRows||[])].reduce((s,r)=>s+Number(r.paid||0),0);
-      const _conPaid  = [{ paid:_bs.contractorPaid||"" },...(_bs.extraContractorRows||[])].reduce((s,r)=>s+Number(r.paid||0),0);
-      const _basePaid = _allRowsX.reduce((s,r)=>s+(r.paid||0),0) + _feePaid + _conPaid;
-      const _ohPaid   = Math.round(_basePaid * Number(_bs.overheadPct||4) / 100);
-      const _bcmPaid  = Math.round((_basePaid+_ohPaid) * Number(_bs.bcmPct||0) / 100);
-      const _vatPaid  = Math.round((_basePaid+_ohPaid+_bcmPaid) * Number(_bs.vatPct||18) / 100);
-      const _grandPaid = _basePaid + _ohPaid + _bcmPaid + _vatPaid;
-      const _received  = (_bs.extraItems||[]).reduce((s,x)=>s+Number(x.amount||0),0);
-      const budgetUtilPct = _received > 0 ? _grandPaid / _received * 100 : null;
-      const utilBg  = budgetUtilPct===null?"":budgetUtilPct<75?"#EFF7F3":budgetUtilPct<85?"#FAF2E6":budgetUtilPct<95?"#FAF2E6":"#F8EDED";
-      const utilBg2 = utilPct===null?"":utilPct<10?"#EFF7F3":utilPct<12?"#FAF2E6":"#F8EDED";
+      const { utilPct, budgetUtilPct } = projStats[p.id] || {};
+      const utilBg  = budgetUtilPct===null||budgetUtilPct===undefined?"":budgetUtilPct<75?"#EFF7F3":budgetUtilPct<85?"#FAF2E6":budgetUtilPct<95?"#FAF2E6":"#F8EDED";
+      const utilBg2 = utilPct===null||utilPct===undefined?"":utilPct<10?"#EFF7F3":utilPct<12?"#FAF2E6":"#F8EDED";
       return {
         cells: [
           d.projectNumber||"", p.name||"", company?.name||"", o.address||"", o.workDescription||"",
@@ -6265,25 +6277,7 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#F7F8FA"}">${row.ce
                 const d = allData[p.id] || {};
                 const o = d.openingData || {};
                 const company = companies.find(c => String(c.id) === String(d.companyId));
-                const cEst = Number(String(o.contractorEst||"").replace(/,/g,"")) || Number(d.budgetState?.contractorEst||0);
-                const _allRowsG = buildBudgetAllRows({ quotesRows: d.quotes||[], consultantsRows: d.consultants||[], budgetState: { ...(d.budgetState||{}), contractorEst: cEst }, statsRows, accountsRows: d.accounts||[], planOnlyMap:{}, openingData: o });
-                const consultantsTotal = _allRowsG.reduce((s,r) => s + (r.payType==="אחוזים" ? r.computedFee : r.value) + r.increases, 0);
-                const _finalMetaG = (d.contractor||[]).find(r=>r.key==="__meta__");
-                const _finalBoqG  = Number(String(_finalMetaG?.finalBoq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
-                const _boqMetaG = (d.tender||[]).find(r=>r.key==="__meta__");
-                const _boqValG  = Number(String(_boqMetaG?.boq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
-                const _utilBaseG = _finalBoqG > 0 ? _finalBoqG : _boqValG > 0 ? _boqValG : cEst;
-                const utilPct = _utilBaseG > 0 ? consultantsTotal / _utilBaseG * 100 : null;
-                const _bs = d.budgetState || {};
-                const _feePaid  = [...(_bs.feeRows||[]),...(_bs.extraFeeRows||[])].reduce((s,r)=>s+Number(r.paid||0),0);
-                const _conPaid  = [{ paid:_bs.contractorPaid||"" },...(_bs.extraContractorRows||[])].reduce((s,r)=>s+Number(r.paid||0),0);
-                const _basePaid = _allRowsG.reduce((s,r)=>s+(r.paid||0),0) + _feePaid + _conPaid;
-                const _ohPaid   = Math.round(_basePaid * Number(_bs.overheadPct||4) / 100);
-                const _bcmPaid  = Math.round((_basePaid+_ohPaid) * Number(_bs.bcmPct||0) / 100);
-                const _vatPaid  = Math.round((_basePaid+_ohPaid+_bcmPaid) * Number(_bs.vatPct||18) / 100);
-                const _grandPaid = _basePaid + _ohPaid + _bcmPaid + _vatPaid;
-                const _received  = (_bs.extraItems||[]).reduce((s,x)=>s+Number(x.amount||0),0);
-                const budgetUtilPct = _received > 0 ? _grandPaid / _received * 100 : null;
+                const { utilPct, budgetUtilPct } = projStats[p.id] || {};
                 return (
                   <tr key={p.id} style={{ borderBottom:"1px solid #F0F2F5", background:i%2===0?"#fff":"#FAFBFC" }}>
                     <td style={{ padding:"6px 8px", borderLeft:"1px solid #F0F2F5" }}>{inp(p.id,"projectNumber",d.projectNumber)}</td>
