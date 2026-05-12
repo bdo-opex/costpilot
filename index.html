@@ -6032,6 +6032,28 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
       return sel.has(getVal(p, fkey));
     }));
 
+  const searchLower = searchQuery.trim().toLowerCase();
+  const filteredProjects = projects.filter(p => {
+    if (!cols.every(({fkey}) => {
+      if (!fkey) return true;
+      const sel = colFilters[fkey];
+      if (sel === undefined) return true;
+      return sel.has(getVal(p, fkey));
+    })) return false;
+    if (searchLower) {
+      const haystack = ["projectNumber","name","company","address","workDescription","planningManager","executionManager","status"]
+        .map(k => getVal(p, k)).join(" ").toLowerCase();
+      if (!haystack.includes(searchLower)) return false;
+    }
+    return true;
+  });
+
+  const prevFilterKey = React.useRef("");
+  const filterKey = searchLower + JSON.stringify(colFilters);
+  if (filterKey !== prevFilterKey.current) { prevFilterKey.current = filterKey; if (page !== 0) setPage(0); }
+  const totalPages = Math.ceil(filteredProjects.length / PAGE_SIZE);
+  const pageProjects = filteredProjects.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
   // Cache expensive per-project budget calculations — only for current page
   const projStats = React.useMemo(() => {
     const out = {};
@@ -6061,28 +6083,6 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
     });
     return out;
   }, [pageProjects, statsRows]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const searchLower = searchQuery.trim().toLowerCase();
-  const filteredProjects = projects.filter(p => {
-    if (!cols.every(({fkey}) => {
-      if (!fkey) return true;
-      const sel = colFilters[fkey];
-      if (sel === undefined) return true;
-      return sel.has(getVal(p, fkey));
-    })) return false;
-    if (searchLower) {
-      const haystack = ["projectNumber","name","company","address","workDescription","planningManager","executionManager","status"]
-        .map(k => getVal(p, k)).join(" ").toLowerCase();
-      if (!haystack.includes(searchLower)) return false;
-    }
-    return true;
-  });
-
-  const prevFilterKey = React.useRef("");
-  const filterKey = searchLower + JSON.stringify(colFilters);
-  if (filterKey !== prevFilterKey.current) { prevFilterKey.current = filterKey; if (page !== 0) setPage(0); }
-  const totalPages = Math.ceil(filteredProjects.length / PAGE_SIZE);
-  const pageProjects = filteredProjects.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const isFiltered = (fkey) => colFilters[fkey] !== undefined;
   const hasAnyFilter = cols.some(({fkey}) => fkey && isFiltered(fkey));
