@@ -452,14 +452,12 @@ function syncProjectData(projData) {
 
   // ── 1. Migrate top-level metadata fields out of openingData ──────────────────
   const o = projData.openingData || {};
-  const _dbg = { id: projData._debugId || "?", keys: Object.keys(o), oPN: o.projectNumber, oPM: o.planningManager, oEM: o.executionManager, topPN: projData.projectNumber, topPM: projData.planningManager, topEM: projData.executionManager };
   ["projectNumber","planningManager","executionManager"].forEach(key => {
     if (!result[key] && o[key]) {
       result = { ...result, [key]: o[key] };
       changed = true;
     }
   });
-  console.log("[syncProjectData]", _dbg, "| consultants:", (projData.consultants||[]).length, "| changed after step1:", changed);
 
   // ── 2. Sync approved quotes → consultants ────────────────────────────────────
   const quotes   = result.quotes   || [];
@@ -515,13 +513,11 @@ function syncProjectData(projData) {
   });
 
   const merged = [...approvedFromQuotes, ...retained];
-  console.log("[syncProjectData] step2 | quotes:", (result.quotes||[]).length, "| approvedFromQuotes:", approvedFromQuotes.length, "| retained:", retained.length, "| existing:", existing.length, "| merged:", merged.length);
   if (merged.length !== existing.length ||
       merged.some((m, i) => m.id !== existing[i]?.id)) {
     result = { ...result, consultants: merged };
     changed = true;
   }
-  console.log("[syncProjectData] final | changed:", changed, "| returning:", changed ? "new obj" : "original");
   return changed ? result : projData;
 }
 
@@ -5977,6 +5973,8 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
   const [filterSearch, setFilterSearch] = React.useState("");
   const [dropPos, setDropPos]         = React.useState({ top:0, left:0 });
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [page, setPage] = React.useState(0);
+  const PAGE_SIZE = 30;
 
   const inp = (projId, key, val) => (
     <input value={val||""} onChange={e=>upd(projId,key,e.target.value)}
@@ -6034,10 +6032,10 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
       return sel.has(getVal(p, fkey));
     }));
 
-  // Cache expensive per-project budget calculations so re-renders don't recompute
+  // Cache expensive per-project budget calculations — only for current page
   const projStats = React.useMemo(() => {
     const out = {};
-    projects.forEach(p => {
+    pageProjects.forEach(p => {
       const d = allData[p.id] || {};
       const o = d.openingData || {};
       const cEst = Number(String(o.contractorEst||"").replace(/,/g,"")) || Number(d.budgetState?.contractorEst||0);
@@ -6062,7 +6060,7 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
       out[p.id] = { utilPct, budgetUtilPct };
     });
     return out;
-  }, [allData, projects, statsRows]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pageProjects, statsRows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const searchLower = searchQuery.trim().toLowerCase();
   const filteredProjects = projects.filter(p => {
@@ -6079,6 +6077,12 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
     }
     return true;
   });
+
+  const prevFilterKey = React.useRef("");
+  const filterKey = searchLower + JSON.stringify(colFilters);
+  if (filterKey !== prevFilterKey.current) { prevFilterKey.current = filterKey; if (page !== 0) setPage(0); }
+  const totalPages = Math.ceil(filteredProjects.length / PAGE_SIZE);
+  const pageProjects = filteredProjects.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const isFiltered = (fkey) => colFilters[fkey] !== undefined;
   const hasAnyFilter = cols.some(({fkey}) => fkey && isFiltered(fkey));
@@ -6273,7 +6277,7 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#F7F8FA"}">${row.ce
               {filteredProjects.length === 0 && (
                 <tr><td colSpan={15} style={{ padding:32, textAlign:"right", color:"#9A9A9A" }}>{projects.length === 0 ? "אין פרויקטים" : "אין תוצאות לסינון"}</td></tr>
               )}
-              {filteredProjects.map((p, i) => {
+              {pageProjects.map((p, i) => {
                 const d = allData[p.id] || {};
                 const o = d.openingData || {};
                 const company = companies.find(c => String(c.id) === String(d.companyId));
@@ -6325,6 +6329,15 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#F7F8FA"}">${row.ce
               })}
             </tbody>
           </table>
+          {totalPages > 1 && (
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"10px 16px", borderTop:"1px solid #F0F2F5", flexShrink:0, background:"#fff" }}>
+              <button onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))} disabled={page===totalPages-1}
+                style={{ padding:"4px 12px", borderRadius:4, border:"1px solid #E2E5EA", background:page===totalPages-1?"#F7F8FA":"#fff", cursor:page===totalPages-1?"default":"pointer", fontSize:12, fontFamily:"'Heebo',sans-serif" }}>←</button>
+              <span style={{ fontSize:12, color:"#767676", fontFamily:"'Heebo',sans-serif" }}>{page+1} / {totalPages} &nbsp;({filteredProjects.length} פרויקטים)</span>
+              <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page===0}
+                style={{ padding:"4px 12px", borderRadius:4, border:"1px solid #E2E5EA", background:page===0?"#F7F8FA":"#fff", cursor:page===0?"default":"pointer", fontSize:12, fontFamily:"'Heebo',sans-serif" }}>→</button>
+            </div>
+          )}
         </div>
       </div>
       </div>
@@ -7500,7 +7513,6 @@ function AppInner({ currentUser, userRole, setUserRole }) {
           synced[id] = s;
           if (s !== combined[id]) toResave.push(id);
         });
-        console.log("[load] synced projects:", Object.keys(synced).length, "| toResave:", toResave.length, toResave.slice(0,5));
         setAllData(synced);
         toResave.forEach(id => saveProjectData(id, synced[id]));
         checkDone();
