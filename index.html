@@ -7267,6 +7267,8 @@ function OpeningTab({ data, setData, budgetState, setBudgetState, statsRows, pro
   const planningMgrs  = (managers||[]).filter(m => m.role === "planning");
   const executionMgrs = (managers||[]).filter(m => m.role === "execution");
   const unitMgrs      = (managers||[]).filter(m => m.role === "unit");
+  const legacyPM = !planningManagerId && data?.planningManager ? data.planningManager : null;
+  const legacyEM = !executionManagerId && data?.executionManager ? data.executionManager : null;
   const selectStyle = { width:"100%", border:"1px solid #E2E5EA", background:"#fff", textAlign:"right", direction:"rtl", fontSize:13, fontFamily:"'Heebo',sans-serif", outline:"none", color:"#0D0D0D", borderRadius:4, padding:"5px 8px", boxSizing:"border-box", cursor: isAdmin ? "pointer" : "default" };
 
   const rows = [
@@ -7303,8 +7305,9 @@ function OpeningTab({ data, setData, budgetState, setBudgetState, statsRows, pro
           <tr style={{ background:"#F7F8FA" }}>
             <td style={{ padding:"10px 16px", textAlign:"right", color:"#3A3A3A", fontSize:13, width:"50%", borderBottom:"1px solid #E2E5EA", borderLeft:"1px solid #E2E5EA", verticalAlign:"middle" }}>מנהל תכנון</td>
             <td style={{ padding:"10px 16px", textAlign:"right", fontSize:13, width:"50%", borderBottom:"1px solid #E2E5EA", verticalAlign:"middle" }}>
-              <select value={planningManagerId||""} disabled={!isAdmin} onChange={isAdmin ? e => onManagerChange("planning", e.target.value) : undefined} style={selectStyle}>
+              <select value={planningManagerId || (legacyPM ? "__legacy_pm__" : "")} disabled={!isAdmin} onChange={isAdmin ? e => { if (e.target.value !== "__legacy_pm__") onManagerChange("planning", e.target.value); } : undefined} style={selectStyle}>
                 <option value="">בחר מנהל תכנון</option>
+                {legacyPM && <option value="__legacy_pm__">{legacyPM}</option>}
                 {planningMgrs.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </td>
@@ -7313,8 +7316,9 @@ function OpeningTab({ data, setData, budgetState, setBudgetState, statsRows, pro
           <tr style={{ background:"#fff" }}>
             <td style={{ padding:"10px 16px", textAlign:"right", color:"#3A3A3A", fontSize:13, width:"50%", borderBottom:"1px solid #E2E5EA", borderLeft:"1px solid #E2E5EA", verticalAlign:"middle" }}>מנהל ביצוע</td>
             <td style={{ padding:"10px 16px", textAlign:"right", fontSize:13, width:"50%", borderBottom:"1px solid #E2E5EA", verticalAlign:"middle" }}>
-              <select value={executionManagerId||""} disabled={!isAdmin} onChange={isAdmin ? e => onManagerChange("execution", e.target.value) : undefined} style={selectStyle}>
+              <select value={executionManagerId || (legacyEM ? "__legacy_em__" : "")} disabled={!isAdmin} onChange={isAdmin ? e => { if (e.target.value !== "__legacy_em__") onManagerChange("execution", e.target.value); } : undefined} style={selectStyle}>
                 <option value="">בחר מנהל ביצוע</option>
+                {legacyEM && <option value="__legacy_em__">{legacyEM}</option>}
                 {executionMgrs.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </td>
