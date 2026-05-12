@@ -5976,6 +5976,7 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
   const [openFilter, setOpenFilter]   = React.useState(null);
   const [filterSearch, setFilterSearch] = React.useState("");
   const [dropPos, setDropPos]         = React.useState({ top:0, left:0 });
+  const [searchQuery, setSearchQuery] = React.useState("");
 
   const inp = (projId, key, val) => (
     <input value={val||""} onChange={e=>upd(projId,key,e.target.value)}
@@ -6033,14 +6034,21 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
       return sel.has(getVal(p, fkey));
     }));
 
-  const filteredProjects = projects.filter(p =>
-    cols.every(({fkey}) => {
+  const searchLower = searchQuery.trim().toLowerCase();
+  const filteredProjects = projects.filter(p => {
+    if (!cols.every(({fkey}) => {
       if (!fkey) return true;
       const sel = colFilters[fkey];
       if (sel === undefined) return true;
       return sel.has(getVal(p, fkey));
-    })
-  );
+    })) return false;
+    if (searchLower) {
+      const haystack = ["projectNumber","name","company","address","workDescription","planningManager","executionManager","status"]
+        .map(k => getVal(p, k)).join(" ").toLowerCase();
+      if (!haystack.includes(searchLower)) return false;
+    }
+    return true;
+  });
 
   const isFiltered = (fkey) => colFilters[fkey] !== undefined;
   const hasAnyFilter = cols.some(({fkey}) => fkey && isFiltered(fkey));
@@ -6209,13 +6217,21 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#F7F8FA"}">${row.ce
         </div>
       </div>
 
+      <div style={{ flexShrink:0, padding:"10px 38px 0" }}>
+        <input type="text" placeholder="חיפוש חופשי..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}
+          style={{ width:"100%", maxWidth:340, border:"1px solid #E2E5EA", borderRadius:4, padding:"7px 12px", fontSize:13,
+            fontFamily:"'Heebo',sans-serif", outline:"none", textAlign:"right", direction:"rtl",
+            background:"#F7F8FA", color:"#0D0D0D", boxSizing:"border-box" }}
+          onFocus={e=>e.target.style.borderColor="#163356"} onBlur={e=>e.target.style.borderColor="#E2E5EA"} />
+      </div>
+
       {renderDropdown()}
 
-      <div style={{ flex:1, overflowY:"auto", minHeight:0, padding:"22px 38px 34px" }}>
-      <Card style={{ padding:0, overflow:"hidden" }}>
-        <div style={{ overflowX:"auto" }}>
+      <div style={{ flex:1, minHeight:0, padding:"12px 38px 34px", display:"flex", flexDirection:"column" }}>
+      <div style={{ background:"#fff", border:"1px solid #E2E5EA", borderRadius:4, boxShadow:"0 1px 3px rgba(0,0,0,0.07)", flex:1, display:"flex", flexDirection:"column", minHeight:0, overflow:"hidden" }}>
+        <div style={{ flex:1, overflowY:"auto", overflowX:"scroll", minHeight:0 }}>
           <table style={{ borderCollapse:"collapse", fontSize:12, direction:"rtl", width:"max-content", minWidth:"100%" }}>
-            <thead>
+            <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               <tr style={{ background:"#F7F8FA", borderBottom:"2px solid #E2E5EA" }}>
                 {cols.map(({label,w,fkey}) => {
                   const active = fkey && isFiltered(fkey);
@@ -6316,7 +6332,7 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#F7F8FA"}">${row.ce
             </tbody>
           </table>
         </div>
-      </Card>
+      </div>
       </div>
     </div>
   );
