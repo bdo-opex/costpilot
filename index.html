@@ -6038,7 +6038,7 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
       if (!fkey) return true;
       const sel = colFilters[fkey];
       if (sel === undefined) return true;
-      return sel.has(getVal(p, fkey));
+      return sel.has(getVal(p, fkey).trim());
     })) return false;
     if (searchLower) {
       const haystack = ["projectNumber","name","company","address","workDescription","planningManager","executionManager","status"]
@@ -6102,7 +6102,7 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
     if (!openFilter) return null;
     const fkey = openFilter;
     const partial = getFilteredExcept(fkey);
-    const allVals = [...new Set(partial.map(p => getVal(p, fkey)))].sort((a,b)=>a.localeCompare(b,"he"));
+    const allVals = [...new Set(partial.map(p => getVal(p, fkey).trim()))].sort((a,b)=>a.localeCompare(b,"he"));
     const sel = colFilters[fkey]; // undefined = no filter; Set = explicit selection
     const isAllSelected = sel === undefined;
     const searchTerm = filterSearch.trim();
