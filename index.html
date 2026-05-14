@@ -5961,9 +5961,14 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
     if (key === "name" || key === "status") {
       setProjects(projects.map(p => p.id===projId ? {...p,[key]:val} : p));
     } else if (key === "projectNumber" || key === "planningManager" || key === "executionManager" || key === "companyId") {
-      setAllData(prev => ({ ...prev, [projId]: { ...(prev[projId]||makeProjectData()), [key]: val } }));
+      const updated = { ...(allData[projId]||makeProjectData()), [key]: val };
+      setAllData(prev => ({ ...prev, [projId]: updated }));
+      saveProjectData(projId, updated);
     } else {
-      setAllData(prev => ({ ...prev, [projId]: { ...(prev[projId]||makeProjectData()), openingData: { ...(prev[projId]?.openingData||{}), [key]: val } } }));
+      const current = allData[projId] || makeProjectData();
+      const updated = { ...current, openingData: { ...(current.openingData||{}), [key]: val } };
+      setAllData(prev => ({ ...prev, [projId]: updated }));
+      saveProjectData(projId, updated);
     }
   };
 
