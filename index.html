@@ -7244,21 +7244,28 @@ function ProjectNumber({ value, onChange }) {
   );
 }
 
-function EditableYear({ year, onChange }) {
+function EditableYear({ year, onChange, readOnly }) {
   const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState(year);
-  if (editing) return (
+  const [val, setVal] = useState(year ?? "");
+  React.useEffect(() => { setVal(year ?? ""); }, [year]);
+  const save = () => {
+    const trimmed = String(val).trim();
+    if (trimmed === "") { onChange(null); }
+    else if (trimmed.length === 4 && !isNaN(Number(trimmed))) { onChange(Number(trimmed)); }
+    setEditing(false);
+  };
+  if (!readOnly && editing) return (
     <input autoFocus type="number" value={val}
       onChange={e => setVal(e.target.value)}
-      onBlur={() => { if(val && String(val).length===4) onChange(Number(val)); setEditing(false); }}
-      onKeyDown={e => { if(e.key==="Enter"){ if(val && String(val).length===4) onChange(Number(val)); setEditing(false); } if(e.key==="Escape") setEditing(false); }}
-      style={{ width:70, fontSize:12, color:"#767676", background:"#F7F8FA", border:"1.5px solid #E2E5EA", borderRadius:4, padding:"4px 8px", fontFamily:"'Heebo',sans-serif", outline:"none", textAlign:"center" }} />
+      onBlur={save}
+      onKeyDown={e => { if(e.key==="Enter") save(); if(e.key==="Escape") setEditing(false); }}
+      style={{ width:80, fontSize:12, color:"#444444", background:"#F7F8FA", border:"1.5px solid #163356", borderRadius:4, padding:"4px 8px", fontFamily:"'Heebo',sans-serif", outline:"none", textAlign:"center" }} />
   );
   return (
-    <span onClick={() => { setVal(year); setEditing(true); }}
-      style={{ fontSize:12, color:"#767676", cursor:"pointer", padding:"4px 8px", border:"1.5px solid #E2E5EA", borderRadius:4, background:"#F7F8FA", fontFamily:"'Heebo',sans-serif", display:"inline-block", lineHeight:1.4, whiteSpace:"nowrap" }}
-      title="לחץ לעריכת שנה">
-      {year}
+    <span onClick={readOnly ? undefined : () => { setVal(year ?? ""); setEditing(true); }}
+      style={{ fontSize:12, color: year?"#444444":"#9A9A9A", cursor: readOnly?"default":"pointer", padding:"4px 8px", border:"1.5px solid #E2E5EA", borderRadius:4, background:"#F7F8FA", fontFamily:"'Heebo',sans-serif", display:"inline-block", lineHeight:1.4, whiteSpace:"nowrap" }}
+      title={readOnly ? undefined : "לחץ לעריכת שנה"}>
+      {year || "שנה"}
     </span>
   );
 }
