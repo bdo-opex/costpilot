@@ -5960,7 +5960,7 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
   const upd = (projId, key, val) => {
     if (key === "name" || key === "status") {
       setProjects(projects.map(p => p.id===projId ? {...p,[key]:val} : p));
-    } else if (key === "projectNumber" || key === "planningManager" || key === "executionManager") {
+    } else if (key === "projectNumber" || key === "planningManager" || key === "executionManager" || key === "companyId") {
       setAllData(prev => ({ ...prev, [projId]: { ...(prev[projId]||makeProjectData()), [key]: val } }));
     } else {
       setAllData(prev => ({ ...prev, [projId]: { ...(prev[projId]||makeProjectData()), openingData: { ...(prev[projId]?.openingData||{}), [key]: val } } }));
@@ -6292,7 +6292,13 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#F7F8FA"}">${row.ce
                         {p.name}
                       </span>
                     </td>
-                    <td style={{ padding:"6px 8px", borderLeft:"1px solid #F0F2F5", color:"#3A3A3A" }}>{company?.name||"—"}</td>
+                    <td style={{ padding:"4px 6px", borderLeft:"1px solid #F0F2F5" }}>
+                      <select value={d.companyId||""} onChange={e=>upd(p.id,"companyId",e.target.value)}
+                        style={{ width:"100%", border:"none", background:"transparent", fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", color:"#0D0D0D", textAlign:"right", cursor:"pointer" }}>
+                        <option value="">—</option>
+                        {(companies||[]).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </td>
                     <td style={{ padding:"6px 8px", borderLeft:"1px solid #F0F2F5" }}>{inp(p.id,"address",o.address)}</td>
                     <td style={{ padding:"6px 8px", borderLeft:"1px solid #F0F2F5" }}>{inp(p.id,"workDescription",o.workDescription)}</td>
                     <td style={{ padding:"6px 8px", borderLeft:"1px solid #F0F2F5" }}>{inp(p.id,"planningManager",d.planningManager)}</td>
