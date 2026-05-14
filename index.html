@@ -8594,7 +8594,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                 return filtered.map((p, i) => (
                 <div key={p.id} className="hov-row"
                   onClick={() => { setSelectedProj(p); setActiveTab("budget"); setGlobalPage(null); touchProject(p); }}
-                  style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 22px", borderBottom:i<visibleProjects.length-1?"1px solid #F0F2F5":"none", cursor:"pointer", transition:"background .15s" }}>
+                  style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 22px", minHeight:68, boxSizing:"border-box", borderBottom:i<visibleProjects.length-1?"1px solid #F0F2F5":"none", cursor:"pointer", transition:"background .15s" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:13 }}>
                     <div style={{ width:42, height:42, borderRadius:11, background:"linear-gradient(135deg,#EAF1FA,#B8CEED)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🏗️</div>
                     <div>
