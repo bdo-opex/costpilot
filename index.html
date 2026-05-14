@@ -6514,11 +6514,11 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
     // ── Consultant quotes ──
     const quotes = (allData[proj.id]?.quotes) || [];
     quotes.forEach(field => {
+      const fieldApproved = field.consultants.some(c => c.name?.trim() && c.approved);
       if (field.readyToRecommend) {
-        const alreadyApproved = field.consultants.some(c => c.name?.trim() && c.approved);
         const namedConsultants = field.consultants.filter(c => c.name?.trim());
         const anyRecommended = namedConsultants.some(c => c.recommended);
-        if (!anyRecommended && !alreadyApproved && namedConsultants.length > 0) {
+        if (!anyRecommended && !fieldApproved && namedConsultants.length > 0) {
           const da = allData[proj.id] || {};
           zoneA.push({ projId: proj.id, projName: proj.name, fieldId: field.id, fieldName: field.fieldName,
             label: "—", value: null, type:"consultant", key: `z1-${proj.id}-${field.id}`, tab:"quotes",
@@ -6546,7 +6546,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
             stage: "quote_invite" })
         );
       }
-      field.consultants.filter(c => c.name?.trim() && c.recommended && !c.sentToMunicipality && !c.approved).forEach(c =>
+      if (!fieldApproved) field.consultants.filter(c => c.name?.trim() && c.recommended && !c.sentToMunicipality && !c.approved).forEach(c =>
         zoneSend.push({ projId: proj.id, projName: proj.name, fieldId: field.id, fieldName: field.fieldName,
           label: c.name, value: c.value, payType: c.payType, type:"consultant", key: `z2-${proj.id}-${field.id}-${c.id}`, tab:"quotes",
           consultantId: c.id,
@@ -6556,7 +6556,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
           managerEmail: "", managerName: "",
           stage: "send_to_municipality" })
       );
-      field.consultants.filter(c => c.name?.trim() && c.sentToMunicipality && !c.approved).forEach(c => {
+      if (!fieldApproved) field.consultants.filter(c => c.name?.trim() && c.sentToMunicipality && !c.approved).forEach(c => {
         zone3.push({ projId: proj.id, projName: proj.name, fieldId: field.id, fieldName: field.fieldName,
           label: c.name, value: c.value, payType: c.payType, type:"consultant", key: `z3-${proj.id}-${field.id}-${c.id}`, tab:"quotes",
           consultantId: c.id,
