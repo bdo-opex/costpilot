@@ -947,6 +947,52 @@ const buildEmailHtml = (intro, tableHeaders, tableRows, outro, rowHighlights, hi
   return `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:13px;direction:rtl;text-align:right;max-width:700px">${p(intro)}${table}${outro ? p(outro) : ""}</div>`;
 };
 
+// ── בונה נתוני טבלת הצעות מחיר למייל — sub-items כעמודות ────────────────────
+// consultants: מערך יועצים של התחום (רק עם שם)
+// calcFeeOrNull: פונקציה (c)=>number לחישוב שכ"ט %-ית, או null
+// highlightFn: פונקציה (c)=>boolean להדגשת שורה
+// returns: { headers, rows, rowHighlights }
+const buildQuoteTableData = (consultants, calcFeeOrNull, highlightFn) => {
+  const allDescs = [];
+  const seen = new Set();
+  consultants.forEach(c => (c.subItems||[]).forEach(it => {
+    const d = it.description || "";
+    if (d && !seen.has(d)) { seen.add(d); allDescs.push(d); }
+  }));
+  const hasAnySub = allDescs.length > 0;
+
+  if (!hasAnySub) {
+    // מבנה מקורי — 5 עמודות
+    const rows = consultants.flatMap(c => {
+      const fee = calcFeeOrNull ? calcFeeOrNull(c) : null;
+      const hasSub = (c.subItems||[]).length > 0;
+      const subTotal = hasSub ? (c.subItems||[]).reduce((s,it)=>s+Number(it.amount||0),0) : null;
+      const mainRow = [c.name||"—", c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:fmt(c.value), fee?fmt(fee):(c.payType!=="אחוזים"?fmt(hasSub?subTotal:c.value):"—"), c.notes||""];
+      if (!hasSub) return [mainRow];
+      return [mainRow, ...c.subItems.map(it => [`  ↳ ${it.description||""}`, "", "", fmt(it.amount), ""])];
+    });
+    const rowHighlights = consultants.flatMap(c => [!!(highlightFn&&highlightFn(c)), ...(c.subItems||[]).map(()=>false)]);
+    return { headers: ["יועץ", "סוג תשלום", "ערך", "סכום ", "הערות"], rows, rowHighlights };
+  }
+
+  // sub-items כעמודות
+  const headers = ["יועץ", "סוג תשלום", ...allDescs, 'סה"כ', "הערות"];
+  const rows = consultants.map(c => {
+    const fee = calcFeeOrNull ? calcFeeOrNull(c) : null;
+    const hasSub = (c.subItems||[]).length > 0;
+    const subTotal = hasSub ? (c.subItems||[]).reduce((s,it)=>s+Number(it.amount||0),0) : null;
+    const totalVal = hasSub ? fmt(subTotal) : fee ? fmt(fee) : (c.payType==="אחוזים" ? `${c.value||0}%` : fmt(c.value));
+    const subCells = allDescs.map(d => {
+      if (!hasSub) return "";
+      const it = (c.subItems||[]).find(x => (x.description||"") === d);
+      return it ? fmt(it.amount) : "";
+    });
+    return [c.name||"—", c.payType||"—", ...subCells, totalVal, c.notes||""];
+  });
+  const rowHighlights = consultants.map(c => !!(highlightFn&&highlightFn(c)));
+  return { headers, rows, rowHighlights };
+};
+
 // ── ApprovalEmailModal — popup לשליחת מייל לגורם המאשר הבא ───────────────────
 function ApprovalEmailModal({ toEmail, toName, subject, body, htmlBody, onSent, onCancel }) {
   return (
@@ -1031,22 +1077,15 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
       return cEst * pp * pct;
     };
     const allC = (field.consultants||[]).filter(c => c.name);
-    const tableRows = allC.flatMap(c => {
-      const fee = c.payType === "אחוזים" ? calcFee(c) : null;
-      const hasSub = c.subItems && c.subItems.length > 0;
-      const subTotal = hasSub ? c.subItems.reduce((s,it)=>s+Number(it.amount||0),0) : null;
-      const mainRow = [c.name, c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:fmt(c.value), fee?fmt(fee):(c.payType!=="אחוזים"?fmt(hasSub?subTotal:c.value):"—"), c.notes||""];
-      if (!hasSub) return [mainRow];
-      return [mainRow, ...c.subItems.map(it => [`  ↳ ${it.description||""}`, "", "", fmt(it.amount), ""])];
-    });
-    const rowHighlights = allC.flatMap(c => [c.id === newlyRec.id, ...(c.subItems||[]).map(()=>false)]);
+    const { headers: _rHeaders, rows: _rRows, rowHighlights } = buildQuoteTableData(allC, calcFee, c => c.id === newlyRec.id);
     const _tendersMgr = (managers||[]).find(m => m.role === "tenders");
     const _tendersName  = projectMeta.tendersManager  || _tendersMgr?.name  || "";
     const _tendersEmail = projectMeta.tendersManagerEmail || _tendersMgr?.email || "";
     const _tIntro = `שלום ${_tendersName || ""},\n\nבפרויקט ${projectMeta.name} היועץ ${newlyRec.name} נבחר כמומלץ עבור תחום ${field.fieldName}\nלהלן כל הצעות המחיר:`;
     const _tOutro = `יש להעביר את ההמלצה למזמין לאישור.${_utilWarn1}\n\nבברכה,\nמערכת CostPilot`;
     const body = `${_tIntro}\n\n${_tOutro}`;
-    const htmlBody = buildEmailHtml(_tIntro, ["יועץ", "סוג תשלום", "ערך", "סכום ", "הערות"], tableRows.length > 0 ? tableRows : [["—","","","",""]], _tOutro, rowHighlights);
+    const _rEmptyRow = _rHeaders.map((_,i) => i===0?"—":"");
+    const htmlBody = buildEmailHtml(_tIntro, _rHeaders, _rRows.length > 0 ? _rRows : [_rEmptyRow], _tOutro, rowHighlights);
     setApprovalModal({ toEmail: _tendersEmail, toName: _tendersName, subject, body, htmlBody });
   };
 
@@ -1074,14 +1113,7 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
           return cEst * pp * pct;
         };
         const consultants = (field.consultants||[]).filter(c => c.name);
-        const tableRows = consultants.flatMap(c => {
-          const fee = c.payType === "אחוזים" ? calcFee(c) : null;
-          const hasSub = c.subItems && c.subItems.length > 0;
-          const subTotal = hasSub ? c.subItems.reduce((s,it)=>s+Number(it.amount||0),0) : null;
-          const mainRow = [c.name||"—", c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:fmt(c.value), fee?fmt(fee):(c.payType!=="אחוזים"?fmt(hasSub?subTotal:c.value):"—"), c.notes||""];
-          if (!hasSub) return [mainRow];
-          return [mainRow, ...c.subItems.map(it => [`  ↳ ${it.description||""}`, "", "", fmt(it.amount), ""])];
-        });
+        const { headers: _dHeaders, rows: _dRows } = buildQuoteTableData(consultants, calcFee, null);
         const _utilWarn2 = (consultantUtilPct||0) >= 10
           ? `\n\n${(consultantUtilPct||0) >= 12 ? "⚠️" : "ℹ️"} אחוז ניצול יועצים: ${(consultantUtilPct||0).toFixed(1)}% — ${(consultantUtilPct||0) >= 12 ? "חריגה מעל 12%" : "קרוב לתקרה (12%)"}`
           : "";
@@ -1091,7 +1123,8 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
         const _dIntro = `שלום ${domainName || ""},\n\nבפרויקט ${projectMeta.name} תחום ${field.fieldName} מוכן לבחירת יועץ מומלץ.\nלהלן הצעות היועצים שהתקבלו:`;
         const _dOutro = `נא אישורכם ליועץ.${_utilWarn2}\n\nבברכה,\nמערכת CostPilot`;
         const body = `${_dIntro}\n\n${_dOutro}`;
-        const htmlBody = buildEmailHtml(_dIntro, ["יועץ", "סוג תשלום", "ערך", "סכום ", "הערות"], tableRows.length > 0 ? tableRows : [["אין יועצים","","","",""]], _dOutro);
+        const _dEmptyRow = _dHeaders.map((_,i) => i===0?"אין יועצים":"");
+        const htmlBody = buildEmailHtml(_dIntro, _dHeaders, _dRows.length > 0 ? _dRows : [_dEmptyRow], _dOutro);
         setApprovalModal({ toEmail: domainEmail, toName: domainName, subject, body, htmlBody,
           onSentExtra: () => setRows(prev => (Array.isArray(prev) ? prev : []).map(r => r.id===fieldId ? {...r, _lastRecommendEmail:{body,htmlBody,subject,toEmail:domainEmail}} : r)) });
       }
@@ -1193,19 +1226,13 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
           onSentToMunicipality={c => {
             if (!projectMeta) return;
             const consultants = (field.consultants||[]).filter(con => con.name);
-            const tableRows = consultants.flatMap(con => {
-              const hasSub = con.subItems && con.subItems.length > 0;
-              const subTotal = hasSub ? con.subItems.reduce((s,it)=>s+Number(it.amount||0),0) : null;
-              const mainRow = [con.name||"—", con.payType||"—", con.payType==="אחוזים"?`${con.value||0}%`:fmt(hasSub?subTotal:con.value), con.notes||""];
-              if (!hasSub) return [mainRow];
-              return [mainRow, ...con.subItems.map(it => [`  ↳ ${it.description||""}`, "", fmt(it.amount), ""])];
-            });
-            const rowHighlights = consultants.flatMap(con => [con.id === c.id, ...(con.subItems||[]).map(()=>false)]);
+            const { headers: _mHeaders, rows: _mRows, rowHighlights } = buildQuoteTableData(consultants, null, con => con.id === c.id);
             const subject = `פרויקט ${projectMeta.name} – תחום- ${field.fieldName}`;
             const intro = `שלום,\n\nבפרויקט ${projectMeta.name} תחום ${field.fieldName} מועבר לאישורכם ראו הצעות היועצים.\nהמלצתנו להתקשרות עם יועץ "${c.name}"`;
             const outro = "בברכה,";
             const body = `${intro}\n\n${outro}`;
-            const htmlBody = buildEmailHtml(intro, ["יועץ","סוג תשלום","ערך","הערות"], tableRows.length ? tableRows : [["אין יועצים","","",""]], outro, rowHighlights);
+            const _mEmptyRow = _mHeaders.map((_,i) => i===0?"אין יועצים":"");
+            const htmlBody = buildEmailHtml(intro, _mHeaders, _mRows.length ? _mRows : [_mEmptyRow], outro, rowHighlights);
             setApprovalModal({ toEmail: "", toName: "", subject, body, htmlBody });
           }}
         />
