@@ -4109,7 +4109,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
         <div style={{ padding:"14px 20px", borderBottom:"1px solid #E2E5EA", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <span style={{ fontWeight:700, color:"#0D0D0D", fontSize:15 }}>פירוט תקציב הפרויקט</span>
         </div>
-        <div>
+        <div style={{ overflow:"auto", maxHeight:"55vh" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, tableLayout:"fixed" }}>
             <colgroup>
               <col style={{ width:"13%" }} />
