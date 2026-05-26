@@ -2890,8 +2890,8 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
       const consultantRow = (consultantsRows||[]).find(r => r.id === "q-"+c.id);
       const increases = consultantRow?.increases || c.increases || [];
       const noClaims  = !!consultantRow?.noClaims;
-      // כשיש בסיס ידני לאדריכל — תמיד חשב מחדש; אחרת השתמש בערך הקפוא
-      const contractFee = (isArch && archBaseManual > 0) ? fee : (consultantRow?.contractFee ?? fee);
+      // יועץ %-י: תמיד חשב מחדש (האחוז מתעדכן עם האומדן); סכום קבוע: השתמש בערך הקפוא
+      const contractFee = isPct ? fee : (consultantRow?.contractFee ?? fee);
       const approvedIncreases = increases.filter(x => x.approvedIncrease);
       const totalInc  = approvedIncreases.reduce((s,x)=>s+Number(x.amount||0),0);
       consultantFees.push({
