@@ -485,6 +485,7 @@ function syncProjectData(projData) {
           contract: c.contract || "",
           payType:  c.payType  || "אחוזים",
           value:    c.value    || "",
+          subItems: c.subItems || [],
           _fromQuote: true,
         });
         approvedQIds.add("q-" + c.id);
@@ -1729,7 +1730,8 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
     onSave({ ...consultant, increases: newInc, contacts, exportNotes });
   };
 
-  const baseVal   = Number(consultant.value || 0) || Number(consultant.contractFee || 0) || consultant._liveFee || 0;
+  const _subTotal = (consultant.subItems||[]).length > 0 ? (consultant.subItems||[]).reduce((s,it)=>s+Number(it.amount||0),0) : null;
+  const baseVal   = _subTotal !== null ? _subTotal : (Number(consultant.value || 0) || Number(consultant.contractFee || 0) || consultant._liveFee || 0);
   // Only approved increases count toward totals
   const totalInc  = increases.filter(x => x.approvedIncrease).reduce((s,x) => s + Number(x.amount||0), 0);
 
