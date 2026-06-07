@@ -1504,6 +1504,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
                     isBold={c.recommended || c.approved}
                     onSelect={name => updateC(c.id, "name", name)}
                   />
+                  <RatingBadge name={c.name} suppliers={suppliers} />
                 </td>
                 {/* סוג תשלום */}
                 <td style={{ padding:"10px 12px", minWidth:110 }}>
@@ -3875,7 +3876,7 @@ function BudgetNumInput({ value, onChange, placeholder="0", style={} }) {
   />;
 }
 
-function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetState, setBudgetState, statsRows, accountsTotalPaid, accountsRows, planOnlyMap, onNavigate, openingData, setOpeningData, tenderRows, contractorRows, projectMeta }) {
+function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetState, setBudgetState, statsRows, accountsTotalPaid, accountsRows, planOnlyMap, onNavigate, openingData, setOpeningData, tenderRows, contractorRows, projectMeta, suppliers }) {
   const [budgetOpenConsultantId, setBudgetOpenConsultantId] = useState(null);
   // Find and enrich consultant for inline modal
   const budgetOpenConsultant = React.useMemo(() => {
@@ -4700,7 +4701,7 @@ function TenderTab({ rows, setRows, quotesRows, consultantsRows, setConsultantsR
                       {consultants.map((c,i)=>(
                         <tr key={c.key} style={{ background:i%2===0?"#fff":"#F7F8FA" }}>
                           <td style={{ ...tdBase, fontWeight:600, color:"#3A3A3A" }}>{c.field}</td>
-                          <td style={{ ...tdBase, fontWeight:600, color:"#0D0D0D" }}>{c.name}</td>
+                          <td style={{ ...tdBase, fontWeight:600, color:"#0D0D0D" }}>{c.name}<RatingBadge name={c.name} suppliers={suppliers} /></td>
                           <td style={{ ...tdBase, color:"#444444" }}>{c.feePct!==null ? c.feePct+"%" : "סכום קבוע"}</td>
                           <td style={{ ...tdBase, color:"#444444" }}>{fmt(c.sectionEst)}</td>
                           <td style={{ ...tdBase, fontWeight:700 }}>{fmt(c.initialFee)}</td>
@@ -5170,10 +5171,30 @@ function FieldMultiSelect({ selected, options, onChange }) {
   );
 }
 
+// ── Supplier rating helpers ───────────────────────────────────────────────────
+const getSupplierAvg = (name, suppliers) => {
+  const s = (suppliers||[]).find(s => s.name === name);
+  if (!s || !s.ratings || s.ratings.length === 0) return null;
+  return s.ratings.reduce((sum, r) => sum + r.avg, 0) / s.ratings.length;
+};
+
+function RatingBadge({ name, suppliers }) {
+  const avg = getSupplierAvg(name, suppliers);
+  if (avg === null) return null;
+  return (
+    <span style={{ fontSize:11, color:"#F5A623", fontWeight:700, marginRight:5, whiteSpace:"nowrap" }}>
+      ★{avg.toFixed(1)}
+    </span>
+  );
+}
+
 // ── Supplier profile modal ────────────────────────────────────────────────────
-function SupplierProfileModal({ supplier, projects, allData, onClose }) {
+function SupplierProfileModal({ supplier, projects, allData, onClose, setSuppliers, userRole }) {
   const [collapsed, setCollapsed] = React.useState({ "הוקפא": true, "נמסר": true, "בוטל": true });
   const [activeField, setActiveField] = React.useState(null);
+  const [addingRating, setAddingRating] = React.useState(false);
+  const [ratingForm, setRatingForm] = React.useState({ projectName:"", service:"", professionalism:"" });
+  const isAdmin = userRole?.role === "admin";
   const toggle = st => setCollapsed(p => ({ ...p, [st]: !p[st] }));
   const toFA = f => Array.isArray(f) ? f : (f ? [f] : []);
 
@@ -5243,11 +5264,77 @@ function SupplierProfileModal({ supplier, projects, allData, onClose }) {
             style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"#9A9A9A", lineHeight:1, padding:"0 2px", flexShrink:0 }}>✕</button>
         </div>
 
-        {/* Star rating placeholder */}
-        <div style={{ display:"flex", gap:3, alignItems:"center" }}>
-          {[1,2,3,4,5].map(i => <span key={i} style={{ fontSize:22, color:"#D8DCE3" }}>☆</span>)}
-          <span style={{ fontSize:11, color:"#B0B7C3", marginRight:6 }}>דירוג יתווסף בהמשך</span>
-        </div>
+        {/* Star rating */}
+        {(() => {
+          const ratings = supplier.ratings || [];
+          const overallAvg = ratings.length > 0 ? ratings.reduce((s,r) => s + r.avg, 0) / ratings.length : null;
+          return (
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+                {[1,2,3,4,5].map(i => (
+                  <span key={i} style={{ fontSize:22, color: overallAvg && i <= Math.round(overallAvg) ? "#F5A623" : "#D8DCE3" }}>
+                    {overallAvg && i <= Math.round(overallAvg) ? "★" : "☆"}
+                  </span>
+                ))}
+                {overallAvg !== null
+                  ? <span style={{ fontSize:13, fontWeight:700, color:"#3A3A3A", marginRight:6 }}>{overallAvg.toFixed(1)} ({ratings.length} דירוגים)</span>
+                  : <span style={{ fontSize:11, color:"#B0B7C3", marginRight:6 }}>אין דירוגים עדיין</span>
+                }
+              </div>
+
+              {/* Admin: ratings list + add form */}
+              {isAdmin && (
+                <div style={{ background:"#F7F8FA", borderRadius:6, padding:"10px 12px", display:"flex", flexDirection:"column", gap:8 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:"#767676", letterSpacing:1 }}>ניהול דירוגים (אדמין)</div>
+                  {ratings.map((r, idx) => (
+                    <div key={idx} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:12 }}>
+                      <span style={{ color:"#3A3A3A" }}>{r.projectName}</span>
+                      <span style={{ color:"#F5A623", fontWeight:700 }}>★ {r.avg.toFixed(1)}</span>
+                      <button onClick={() => {
+                        const updated = { ...supplier, ratings: ratings.filter((_,i) => i !== idx) };
+                        setSuppliers(prev => prev.map(s => s.id === supplier.id ? updated : s));
+                      }} style={{ background:"#F8EDED", color:"#5C2020", border:"none", borderRadius:4, padding:"2px 8px", fontSize:11, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>מחק</button>
+                    </div>
+                  ))}
+                  {!addingRating ? (
+                    <button onClick={() => setAddingRating(true)}
+                      style={{ alignSelf:"flex-start", background:"#EAF1FA", color:"#163356", border:"1.5px dashed #B8CEED", borderRadius:4, padding:"4px 12px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:700 }}>
+                      + הוסף דירוג
+                    </button>
+                  ) : (
+                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                      <input placeholder="שם פרויקט" value={ratingForm.projectName}
+                        onChange={e => setRatingForm(p => ({...p, projectName:e.target.value}))}
+                        style={{ padding:"5px 8px", border:"1.5px solid #E2E5EA", borderRadius:4, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none" }} />
+                      <div style={{ display:"flex", gap:8 }}>
+                        <input placeholder="שירות/זמינות (1-5)" value={ratingForm.service} type="number" min="1" max="5"
+                          onChange={e => setRatingForm(p => ({...p, service:e.target.value}))}
+                          style={{ padding:"5px 8px", border:"1.5px solid #E2E5EA", borderRadius:4, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", width:"50%" }} />
+                        <input placeholder="מקצועיות (1-5)" value={ratingForm.professionalism} type="number" min="1" max="5"
+                          onChange={e => setRatingForm(p => ({...p, professionalism:e.target.value}))}
+                          style={{ padding:"5px 8px", border:"1.5px solid #E2E5EA", borderRadius:4, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", width:"50%" }} />
+                      </div>
+                      <div style={{ display:"flex", gap:8 }}>
+                        <button onClick={() => {
+                          const svc = Number(ratingForm.service), pro = Number(ratingForm.professionalism);
+                          if (!ratingForm.projectName.trim() || !svc || !pro || svc<1||svc>5||pro<1||pro>5) return;
+                          const avg = (svc + pro) / 2;
+                          const newEntry = { projectName: ratingForm.projectName.trim(), avg, ratedAt: Date.now() };
+                          const updated = { ...supplier, ratings: [...ratings, newEntry] };
+                          setSuppliers(prev => prev.map(s => s.id === supplier.id ? updated : s));
+                          setRatingForm({ projectName:"", service:"", professionalism:"" });
+                          setAddingRating(false);
+                        }} style={{ background:"#0B1F3A", color:"#fff", border:"none", borderRadius:4, padding:"5px 16px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:700 }}>שמור</button>
+                        <button onClick={() => { setAddingRating(false); setRatingForm({ projectName:"", service:"", professionalism:"" }); }}
+                          style={{ background:"#F0F2F5", color:"#767676", border:"none", borderRadius:4, padding:"5px 12px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>ביטול</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         <div style={{ borderTop:"1px solid #E2E5EA" }} />
 
@@ -5293,7 +5380,7 @@ function SupplierProfileModal({ supplier, projects, allData, onClose }) {
 }
 
 // ── Global page: רשימת ספקים ─────────────────────────────────────────────────
-function SuppliersPage({ suppliers, setSuppliers, professions, projects, allData }) {
+function SuppliersPage({ suppliers, setSuppliers, professions, projects, allData, userRole }) {
   const [search,   setSearch]   = useState("");
   const [profileSupplier, setProfileSupplier] = useState(null);
   const [editId,   setEditId]   = useState(null);   // supplier id or "new"
@@ -5473,6 +5560,8 @@ function SuppliersPage({ suppliers, setSuppliers, professions, projects, allData
           projects={projects || []}
           allData={allData || {}}
           onClose={() => setProfileSupplier(null)}
+          setSuppliers={setSuppliers}
+          userRole={userRole}
         />
       )}
 
@@ -6120,10 +6209,68 @@ function saveAllData(data) {
 // ── Global page: מידע ראשי ───────────────────────────────────────────────────
 const PROJ_STATUSES_MAIN = ["תכנון","ביצוע","נמסר","הוקפא","בוטל"];
 
-function MainInfoPage({ allData, projects, companies, setAllData, setProjects, onNavigate, statsRows }) {
+function MainInfoPage({ allData, projects, companies, setAllData, setProjects, onNavigate, statsRows, managers }) {
+  const openRatingEmail = (projId, oldStatus, newStatus) => {
+    const freezeTargets = ["הוקפא","בוטל"];
+    let managerType = null;
+    if (oldStatus === "תכנון" && newStatus === "ביצוע") managerType = "planning";
+    else if (oldStatus === "ביצוע" && newStatus === "נמסר") managerType = "execution";
+    else if (freezeTargets.includes(newStatus)) managerType = oldStatus === "ביצוע" ? "execution" : "planning";
+    if (!managerType) return;
+
+    const projData = allData[projId] || {};
+    const proj = projects.find(p => p.id === projId);
+    if (!proj) return;
+
+    let managerName = "", managerEmail = "";
+    if (managerType === "planning") {
+      managerName = projData.planningManager || "";
+      managerEmail = projData.planningManagerEmail || "";
+      if (!managerEmail && projData.planningManagerId) {
+        const m = (managers||[]).find(m => m.id === projData.planningManagerId);
+        managerEmail = m?.email || ""; managerName = managerName || m?.name || "";
+      }
+    } else {
+      managerName = projData.executionManager || "";
+      managerEmail = projData.executionManagerEmail || "";
+      if (!managerEmail && projData.executionManagerId) {
+        const m = (managers||[]).find(m => m.id === projData.executionManagerId);
+        managerEmail = m?.email || ""; managerName = managerName || m?.name || "";
+      }
+    }
+
+    const consultants = [];
+    (projData.quotes || []).forEach(field => {
+      (field.consultants || []).forEach(c => {
+        if (c.approved && c.name?.trim()) consultants.push({ field: field.fieldName || "", name: c.name.trim() });
+      });
+    });
+    if (consultants.length === 0) return;
+
+    const phaseName = managerType === "planning" ? "תכנון" : "ביצוע";
+    const subject = `דירוג יועצים — ${proj.name} — שלב ${phaseName}`;
+    const sep = "─".repeat(60);
+    const hdr = `תחום               שם יועץ                    שירות/זמינות (1-5)    מקצועיות (1-5)`;
+    const rows = consultants.map(c => `${(c.field+"               ").slice(0,19)} ${(c.name+"                          ").slice(0,26)}`).join("\n");
+    const body = [
+      `שלום${managerName ? " " + managerName : ""},`,
+      "",
+      `בקשה לדרג את יועצי הפרויקט "${proj.name}" עבור שלב ${phaseName}.`,
+      "נא למלא את הניקוד (1-5) ולשלוח למנהלת המכרזים.",
+      "",
+      sep, hdr, sep, rows, sep,
+    ].join("\n");
+
+    window.location.href = `mailto:${encodeURIComponent(managerEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
   const upd = (projId, key, val) => {
     if (key === "name" || key === "status") {
       setProjects(projects.map(p => p.id===projId ? {...p,[key]:val} : p));
+      if (key === "status") {
+        const oldStatus = projects.find(p => p.id === projId)?.status || "";
+        openRatingEmail(projId, oldStatus, val);
+      }
     } else if (key === "projectNumber" || key === "planningManager" || key === "executionManager" || key === "companyId") {
       const updated = { ...(allData[projId]||makeProjectData()), [key]: val };
       setAllData(prev => ({ ...prev, [projId]: updated }));
@@ -8681,6 +8828,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
             suppliers={suppliers} setSuppliers={setSuppliers}
             professions={[...new Set([...statsRows.map(r => r.field), ...suppliers.flatMap(s=>Array.isArray(s.field)?s.field:(s.field?[s.field]:[])).filter(Boolean)])]}
             projects={projects} allData={allData}
+            userRole={userRole}
           />
         )}
         {!selectedProj && globalPage === "companies" && (
@@ -8703,7 +8851,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
 
         {!selectedProj && globalPage === "maininfo" && (
           <MainInfoPage allData={allData} projects={visibleProjects} companies={companies} setAllData={setAllData} setProjects={p=>{setProjects(p);saveProjects(p);}}
-            onNavigate={proj => { setSelectedProj(proj); setActiveTab("budget"); setGlobalPage(null); }} statsRows={statsRows} />
+            onNavigate={proj => { setSelectedProj(proj); setActiveTab("budget"); setGlobalPage(null); }} statsRows={statsRows} managers={managers} />
         )}
         {!selectedProj && globalPage === "costs" && (
           <CostsPage allData={allData} projects={visibleProjects} statsRows={statsRows} />
@@ -9025,6 +9173,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                   tenderRows={getData(projId,"tender")}
                   contractorRows={getData(projId,"contractor")}
                   projectMeta={{ id:projId, name:selectedProj.name, status:selectedProj.status, unitManager:allData[projId]?.unitManager||"", unitManagerEmail:allData[projId]?.unitManagerEmail||"" }}
+                  suppliers={suppliers}
                   onNavigate={(tab, consultantId) => {
                     setActiveTab(tab);
                     setOpenConsultantId(consultantId);
