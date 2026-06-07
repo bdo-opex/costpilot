@@ -5173,20 +5173,28 @@ function FieldMultiSelect({ selected, options, onChange }) {
 // ── Supplier profile modal ────────────────────────────────────────────────────
 function SupplierProfileModal({ supplier, projects, allData, onClose }) {
   const [collapsed, setCollapsed] = React.useState({ "הוקפא": true, "נמסר": true, "בוטל": true });
+  const [activeField, setActiveField] = React.useState(null);
   const toggle = st => setCollapsed(p => ({ ...p, [st]: !p[st] }));
   const toFA = f => Array.isArray(f) ? f : (f ? [f] : []);
 
   const supplierName = (supplier.name || "").trim().toLowerCase();
-  const matched = [];
+  const allMatched = [];
   (projects || []).forEach(proj => {
     (allData[proj.id]?.quotes || []).forEach(field => {
       (field.consultants || []).forEach(c => {
         if ((c.name || "").trim().toLowerCase() === supplierName) {
-          matched.push({ proj, fieldName: field.fieldName || "", consultant: c });
+          allMatched.push({ proj, fieldName: field.fieldName || "", consultant: c });
         }
       });
     });
   });
+
+  // Unique fields this supplier appears in across all projects
+  const uniqueFields = [...new Set(allMatched.map(m => m.fieldName).filter(Boolean))];
+  const multiField = uniqueFields.length > 1;
+
+  // Filter by active field tab if selected
+  const matched = activeField ? allMatched.filter(m => m.fieldName === activeField) : allMatched;
 
   const STATUSES = ["תכנון", "ביצוע", "הוקפא", "נמסר", "בוטל"];
   const groups = {};
@@ -5197,12 +5205,6 @@ function SupplierProfileModal({ supplier, projects, allData, onClose }) {
     groups[st].push(item);
   });
 
-  const fmtVal = c => {
-    if (c.payType === "אחוזים") return `${c.value || 0}%`;
-    const n = Number(c.value || 0);
-    return n ? n.toLocaleString("he-IL") + " ₪" : "—";
-  };
-
   return (
     <div style={{ position:"fixed", inset:0, background:"#00000060", display:"flex", alignItems:"center", justifyContent:"center", zIndex:2000 }}
       onClick={onClose}>
@@ -5212,9 +5214,29 @@ function SupplierProfileModal({ supplier, projects, allData, onClose }) {
         {/* Name + close */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
           <div>
-            <div style={{ fontSize:19, fontWeight:800, color:"#0D0D0D", marginBottom:3 }}>{supplier.name}</div>
+            <div style={{ fontSize:19, fontWeight:800, color:"#0D0D0D", marginBottom:6 }}>{supplier.name}</div>
+            {/* Field tags — clickable when multiple fields */}
             {toFA(supplier.field).length > 0 && (
-              <div style={{ fontSize:12, color:"#767676" }}>{toFA(supplier.field).join(", ")}</div>
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                {toFA(supplier.field).map(f => {
+                  const isActive = activeField === f;
+                  return (
+                    <span key={f}
+                      onClick={multiField ? e => { e.stopPropagation(); setActiveField(isActive ? null : f); } : undefined}
+                      style={{
+                        fontSize:12, padding:"3px 10px", borderRadius:20,
+                        background: isActive ? "#0B1F3A" : "#EAF1FA",
+                        color: isActive ? "#fff" : "#3A6B9A",
+                        fontWeight:600,
+                        cursor: multiField ? "pointer" : "default",
+                        userSelect:"none",
+                        border: isActive ? "1.5px solid #0B1F3A" : "1.5px solid #B8CEED",
+                      }}>
+                      {f}
+                    </span>
+                  );
+                })}
+              </div>
             )}
           </div>
           <button onClick={onClose}
@@ -5231,7 +5253,7 @@ function SupplierProfileModal({ supplier, projects, allData, onClose }) {
 
         <div style={{ fontSize:13, fontWeight:700, color:"#3A3A3A" }}>פרויקטים ({matched.length})</div>
 
-        {matched.length === 0 ? (
+        {allMatched.length === 0 ? (
           <div style={{ color:"#9A9A9A", fontSize:13, padding:"8px 0" }}>ספק זה אינו מופיע כיועץ באף פרויקט</div>
         ) : (
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
@@ -5252,12 +5274,10 @@ function SupplierProfileModal({ supplier, projects, allData, onClose }) {
                   </div>
                   {isOpen && (
                     <div style={{ padding:"8px 0" }}>
-                      {items.map(({ proj, fieldName, consultant }, idx) => (
+                      {items.map(({ proj }, idx) => (
                         <div key={proj.id + "-" + idx}
-                          style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 14px", borderTop: idx > 0 ? "1px solid #F0F2F5" : "none", gap:8 }}>
-                          <div style={{ fontWeight:600, fontSize:13, color:"#0D0D0D", flex:1 }}>{proj.name}</div>
-                          <div style={{ fontSize:12, color:"#767676", whiteSpace:"nowrap" }}>{fieldName}</div>
-                          <div style={{ fontSize:12, color:"#3A6B9A", fontWeight:600, whiteSpace:"nowrap", minWidth:60, textAlign:"left" }}>{fmtVal(consultant)}</div>
+                          style={{ padding:"8px 14px", borderTop: idx > 0 ? "1px solid #F0F2F5" : "none" }}>
+                          <div style={{ fontWeight:600, fontSize:13, color:"#0D0D0D" }}>{proj.name}</div>
                         </div>
                       ))}
                     </div>
