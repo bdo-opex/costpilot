@@ -5215,10 +5215,10 @@ function SupplierProfileModal({ supplier, projects, allData, onClose }) {
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
           <div>
             <div style={{ fontSize:19, fontWeight:800, color:"#0D0D0D", marginBottom:6 }}>{supplier.name}</div>
-            {/* Field tags — clickable when multiple fields */}
-            {toFA(supplier.field).length > 0 && (
+            {/* Field tags — derived from actual project appearances, clickable when multiple */}
+            {uniqueFields.length > 0 && (
               <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                {toFA(supplier.field).map(f => {
+                {uniqueFields.map(f => {
                   const isActive = activeField === f;
                   return (
                     <span key={f}
