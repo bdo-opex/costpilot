@@ -273,7 +273,7 @@
         const updated = users.map(u => u.uid === uid ? { ...u, ...patch } : u);
         setUsers(updated);
         const u = updated.find(x => x.uid === uid);
-        await saveUserRole(uid, { role: u.role || "user", projects: u.projects || [], email: u.email || "" });
+        await saveUserRole(uid, { role: u.role ?? "user", projects: u.projects || [], email: u.email || "" });
         setSaving(null);
       };
 
@@ -537,20 +537,21 @@ function App() {
               if (u) {
                 setUser(u);
                 // טעינת הרשאות
-                const roleData = await loadUserRole(u.uid);
+                let roleData = null;
+                try { roleData = await loadUserRole(u.uid); } catch(e) { console.warn("loadUserRole error", e); }
                 if (roleData) {
                   // קיים - אל תדרוס, רק עדכן מייל אם חסר
                   if (!roleData.email && u.email) {
                     const updated = { ...roleData, email: u.email };
-                    await saveUserRole(u.uid, updated);
+                    try { await saveUserRole(u.uid, updated); } catch(e) {}
                     setUserRole(updated);
                   } else {
                     setUserRole(roleData);
                   }
-                } else {
-                  // משתמש חדש - ברירת מחדל user
+                } else if (roleData === null) {
+                  // משתמש חדש בלבד (לא שגיאת רשת) - ברירת מחדל user
                   const newRole = { role: "user", projects: [], email: u.email || "" };
-                  await saveUserRole(u.uid, newRole);
+                  try { await saveUserRole(u.uid, newRole); } catch(e) {}
                   setUserRole(newRole);
                 }
               } else {
@@ -5169,9 +5170,112 @@ function FieldMultiSelect({ selected, options, onChange }) {
   );
 }
 
+// ── Supplier profile modal ────────────────────────────────────────────────────
+function SupplierProfileModal({ supplier, projects, allData, onClose }) {
+  const [collapsed, setCollapsed] = React.useState({ "הוקפא": true, "נמסר": true, "בוטל": true });
+  const toggle = st => setCollapsed(p => ({ ...p, [st]: !p[st] }));
+  const toFA = f => Array.isArray(f) ? f : (f ? [f] : []);
+
+  const supplierName = (supplier.name || "").trim().toLowerCase();
+  const matched = [];
+  (projects || []).forEach(proj => {
+    (allData[proj.id]?.quotes || []).forEach(field => {
+      (field.consultants || []).forEach(c => {
+        if ((c.name || "").trim().toLowerCase() === supplierName) {
+          matched.push({ proj, fieldName: field.fieldName || "", consultant: c });
+        }
+      });
+    });
+  });
+
+  const STATUSES = ["תכנון", "ביצוע", "הוקפא", "נמסר", "בוטל"];
+  const groups = {};
+  STATUSES.forEach(st => { groups[st] = []; });
+  matched.forEach(item => {
+    const st = item.proj.status || "תכנון";
+    if (!groups[st]) groups[st] = [];
+    groups[st].push(item);
+  });
+
+  const fmtVal = c => {
+    if (c.payType === "אחוזים") return `${c.value || 0}%`;
+    const n = Number(c.value || 0);
+    return n ? n.toLocaleString("he-IL") + " ₪" : "—";
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#00000060", display:"flex", alignItems:"center", justifyContent:"center", zIndex:2000 }}
+      onClick={onClose}>
+      <div className="fade" onClick={e => e.stopPropagation()}
+        style={{ background:"#fff", borderRadius:8, padding:28, width:"90%", maxWidth:560, maxHeight:"88vh", overflowY:"auto", boxShadow:"0 24px 64px #0004", display:"flex", flexDirection:"column", gap:16, direction:"rtl" }}>
+
+        {/* Name + close */}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+          <div>
+            <div style={{ fontSize:19, fontWeight:800, color:"#0D0D0D", marginBottom:3 }}>{supplier.name}</div>
+            {toFA(supplier.field).length > 0 && (
+              <div style={{ fontSize:12, color:"#767676" }}>{toFA(supplier.field).join(", ")}</div>
+            )}
+          </div>
+          <button onClick={onClose}
+            style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"#9A9A9A", lineHeight:1, padding:"0 2px", flexShrink:0 }}>✕</button>
+        </div>
+
+        {/* Star rating placeholder */}
+        <div style={{ display:"flex", gap:3, alignItems:"center" }}>
+          {[1,2,3,4,5].map(i => <span key={i} style={{ fontSize:22, color:"#D8DCE3" }}>☆</span>)}
+          <span style={{ fontSize:11, color:"#B0B7C3", marginRight:6 }}>דירוג יתווסף בהמשך</span>
+        </div>
+
+        <div style={{ borderTop:"1px solid #E2E5EA" }} />
+
+        <div style={{ fontSize:13, fontWeight:700, color:"#3A3A3A" }}>פרויקטים ({matched.length})</div>
+
+        {matched.length === 0 ? (
+          <div style={{ color:"#9A9A9A", fontSize:13, padding:"8px 0" }}>ספק זה אינו מופיע כיועץ באף פרויקט</div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {STATUSES.map(st => {
+              const items = groups[st] || [];
+              if (items.length === 0) return null;
+              const isOpen = !collapsed[st];
+              return (
+                <div key={st} style={{ border:"1px solid #E2E5EA", borderRadius:6, overflow:"hidden" }}>
+                  <div onClick={() => toggle(st)}
+                    style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", background:"#F7F8FA", cursor:"pointer", userSelect:"none" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <div style={{ width:8, height:8, borderRadius:"50%", background:statusColor(st), flexShrink:0 }} />
+                      <span style={{ fontWeight:700, fontSize:13, color:"#0D0D0D" }}>{st}</span>
+                      <span style={{ fontSize:12, color:"#767676" }}>({items.length})</span>
+                    </div>
+                    <span style={{ fontSize:12, color:"#9A9A9A" }}>{isOpen ? "▲" : "▼"}</span>
+                  </div>
+                  {isOpen && (
+                    <div style={{ padding:"8px 0" }}>
+                      {items.map(({ proj, fieldName, consultant }, idx) => (
+                        <div key={proj.id + "-" + idx}
+                          style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 14px", borderTop: idx > 0 ? "1px solid #F0F2F5" : "none", gap:8 }}>
+                          <div style={{ fontWeight:600, fontSize:13, color:"#0D0D0D", flex:1 }}>{proj.name}</div>
+                          <div style={{ fontSize:12, color:"#767676", whiteSpace:"nowrap" }}>{fieldName}</div>
+                          <div style={{ fontSize:12, color:"#3A6B9A", fontWeight:600, whiteSpace:"nowrap", minWidth:60, textAlign:"left" }}>{fmtVal(consultant)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Global page: רשימת ספקים ─────────────────────────────────────────────────
-function SuppliersPage({ suppliers, setSuppliers, professions }) {
+function SuppliersPage({ suppliers, setSuppliers, professions, projects, allData }) {
   const [search,   setSearch]   = useState("");
+  const [profileSupplier, setProfileSupplier] = useState(null);
   const [editId,   setEditId]   = useState(null);   // supplier id or "new"
   const [editData,   setEditData]   = useState(null);   // { name, field, notes, contacts:[] }
   const [editError, setEditError] = useState("");
@@ -5314,7 +5418,8 @@ function SuppliersPage({ suppliers, setSuppliers, professions }) {
                 const isLast  = ci === cts.length - 1;
                 return (
                   <tr key={s.id+"-"+(c?c.id:0)} className="hov-row"
-                    style={{ background: c&&!isFirst?"#F7F8FA":bg, borderBottom: isLast?"1px solid #E2E5EA":"1px solid #EAF1FA" }}>
+                    onClick={() => setProfileSupplier(s)}
+                    style={{ background: c&&!isFirst?"#F7F8FA":bg, borderBottom: isLast?"1px solid #E2E5EA":"1px solid #EAF1FA", cursor:"pointer" }}>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A", verticalAlign:"top" }}>{isFirst ? (toFieldArr(s.field).join(", ") || "—") : ""}</td>
                     <td style={{ padding:"10px 16px", fontWeight: isFirst?700:400, color: isFirst?"#0D0D0D":"#767676", verticalAlign:"top" }}>{isFirst ? s.name : ""}</td>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A" }}>{c ? (c.contact||"—") : "—"}</td>
@@ -5324,8 +5429,8 @@ function SuppliersPage({ suppliers, setSuppliers, professions }) {
                     <td style={{ padding:"10px 16px", color:"#3A3A3A", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{isFirst ? (s.notes||"—") : ""}</td>
                     <td style={{ padding:"10px 16px", whiteSpace:"nowrap" }}>
                       {isFirst && <>
-                        <button onClick={() => openEdit(s)} style={{ background:"#F7F8FA", color:"#3A3A3A", border:"none", borderRadius:4, padding:"4px 10px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif", marginLeft:4 }}>✏️</button>
-                        <button onClick={() => del(s.id)} style={{ background:"#F8EDED", color:"#5C2020", border:"none", borderRadius:4, padding:"4px 10px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>🗑</button>
+                        <button onClick={e => { e.stopPropagation(); openEdit(s); }} style={{ background:"#F7F8FA", color:"#3A3A3A", border:"none", borderRadius:4, padding:"4px 10px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif", marginLeft:4 }}>✏️</button>
+                        <button onClick={e => { e.stopPropagation(); del(s.id); }} style={{ background:"#F8EDED", color:"#5C2020", border:"none", borderRadius:4, padding:"4px 10px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>🗑</button>
                       </>}
                     </td>
                   </tr>
@@ -5340,6 +5445,16 @@ function SuppliersPage({ suppliers, setSuppliers, professions }) {
           </tfoot>
         </table>
       </Card>
+
+      {/* Supplier profile modal */}
+      {profileSupplier && (
+        <SupplierProfileModal
+          supplier={profileSupplier}
+          projects={projects || []}
+          allData={allData || {}}
+          onClose={() => setProfileSupplier(null)}
+        />
+      )}
 
       {/* Add / Edit modal */}
       {editId && editData && (
@@ -8545,6 +8660,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
           <SuppliersPage
             suppliers={suppliers} setSuppliers={setSuppliers}
             professions={[...new Set([...statsRows.map(r => r.field), ...suppliers.flatMap(s=>Array.isArray(s.field)?s.field:(s.field?[s.field]:[])).filter(Boolean)])]}
+            projects={projects} allData={allData}
           />
         )}
         {!selectedProj && globalPage === "companies" && (
