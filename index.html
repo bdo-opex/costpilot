@@ -3876,7 +3876,7 @@ function BudgetNumInput({ value, onChange, placeholder="0", style={} }) {
   />;
 }
 
-function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetState, setBudgetState, statsRows, accountsTotalPaid, accountsRows, planOnlyMap, onNavigate, openingData, setOpeningData, tenderRows, contractorRows, projectMeta, suppliers }) {
+function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetState, setBudgetState, statsRows, accountsTotalPaid, accountsRows, planOnlyMap, onNavigate, openingData, setOpeningData, tenderRows, contractorRows, projectMeta, suppliers = [] }) {
   const [budgetOpenConsultantId, setBudgetOpenConsultantId] = useState(null);
   // Find and enrich consultant for inline modal
   const budgetOpenConsultant = React.useMemo(() => {
@@ -5172,10 +5172,10 @@ function FieldMultiSelect({ selected, options, onChange }) {
 }
 
 // ── Supplier rating helpers ───────────────────────────────────────────────────
-const getSupplierAvg = (name, suppliers) => {
-  const s = (suppliers||[]).find(s => s.name === name);
-  if (!s || !s.ratings || s.ratings.length === 0) return null;
-  return s.ratings.reduce((sum, r) => sum + r.avg, 0) / s.ratings.length;
+const getSupplierAvg = (name, allSuppliers) => {
+  const found = (allSuppliers||[]).find(sup => sup.name === name);
+  if (!found || !found.ratings || found.ratings.length === 0) return null;
+  return found.ratings.reduce((sum, r) => sum + r.avg, 0) / found.ratings.length;
 };
 
 function RatingBadge({ name, suppliers }) {
