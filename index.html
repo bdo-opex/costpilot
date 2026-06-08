@@ -965,17 +965,18 @@ const buildQuoteTableData = (consultants, calcFeeOrNull, highlightFn) => {
   const hasAnySub = allDescs.length > 0;
 
   if (!hasAnySub) {
-    // מבנה מקורי — 5 עמודות
+    // מבנה מקורי — 4 עמודות
     const rows = consultants.flatMap(c => {
       const fee = calcFeeOrNull ? calcFeeOrNull(c) : null;
       const hasSub = (c.subItems||[]).length > 0;
       const subTotal = hasSub ? (c.subItems||[]).reduce((s,it)=>s+Number(it.amount||0),0) : null;
-      const mainRow = [c.name||"—", c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:fmt(c.value), fee?fmt(fee):(c.payType!=="אחוזים"?fmt(hasSub?subTotal:c.value):"—"), c.notes||""];
+      const amtVal = fee ? fmt(fee) : (c.payType==="אחוזים" ? `${c.value||0}%` : fmt(hasSub ? subTotal : c.value));
+      const mainRow = [c.name||"—", c.payType||"—", amtVal, c.notes||""];
       if (!hasSub) return [mainRow];
-      return [mainRow, ...c.subItems.map(it => [`  ↳ ${it.description||""}`, "", "", fmt(it.amount), ""])];
+      return [mainRow, ...c.subItems.map(it => [`  ↳ ${it.description||""}`, "", fmt(it.amount), ""])];
     });
     const rowHighlights = consultants.flatMap(c => [!!(highlightFn&&highlightFn(c)), ...(c.subItems||[]).map(()=>false)]);
-    return { headers: ["יועץ", "סוג תשלום", "ערך", "סכום ", "הערות"], rows, rowHighlights };
+    return { headers: ["יועץ", "סוג תשלום", "סכום", "הערות"], rows, rowHighlights };
   }
 
   // sub-items כעמודות
@@ -7479,13 +7480,15 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
         const field = (d.quotes||[]).find(f => f.id === item.fieldId);
         if (field) {
           const consultants = (field.consultants||[]).filter(c => c.name);
-          const tableRows = consultants.map(c => [c.name||"—", c.payType||"—", c.payType==="אחוזים" ? `${c.value||0}%` : fmt(c.value), c.notes||""]);
+          const _cEst = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || 0;
+          const _feeRow = c => { const fee = (_cEst && c.payType==="אחוזים") ? _cEst * Number(c.value||0) / 100 : null; return fee ? fmt(fee) : (c.payType==="אחוזים" ? `${c.value||0}%` : fmt(c.value)); };
+          const tableRows = consultants.map(c => [c.name||"—", c.payType||"—", _feeRow(c), c.notes||""]);
           const _domName = _domainMgrR?.name  || "";
           const _domTo   = _domainMgrR?.email || "";
           const recOutro = "נא אישורכם ליועץ.\n\nבברכה,\nמערכת CostPilot";
           const intro = `${greet(_domName)}\n\nבפרויקט ${item.projName} תחום ${field.fieldName} מוכן לבחירת יועץ מומלץ.\nלהלן הצעות היועצים שהתקבלו:`;
           const body = `${intro}\n\n${recOutro}`;
-          const htmlBody = buildEmailHtml(intro, ["יועץ","סוג תשלום","ערך","הערות"], tableRows.length ? tableRows : [["אין יועצים","","",""]], recOutro);
+          const htmlBody = buildEmailHtml(intro, ["יועץ","סוג תשלום","סכום","הערות"], tableRows.length ? tableRows : [["אין יועצים","","",""]], recOutro);
           return { body, htmlBody, toEmail: _domTo };
         }
       }
@@ -7496,12 +7499,14 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
         if (field) {
           const consultants = (field.consultants||[]).filter(c => c.name);
           const recommendedName = item.label || consultants.find(c => c.recommended)?.name || "";
-          const tableRows = consultants.map(c => [c.name||"—", c.payType||"—", c.payType==="אחוזים" ? `${c.value||0}%` : fmt(c.value), c.notes||""]);
+          const _cEstStm = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || 0;
+          const _feeRowStm = c => { const fee = (_cEstStm && c.payType==="אחוזים") ? _cEstStm * Number(c.value||0) / 100 : null; return fee ? fmt(fee) : (c.payType==="אחוזים" ? `${c.value||0}%` : fmt(c.value)); };
+          const tableRows = consultants.map(c => [c.name||"—", c.payType||"—", _feeRowStm(c), c.notes||""]);
           const rowHighlights = consultants.map(c => c.recommended);
           const stmOutro = "בברכה,";
           const stmIntro = `${greet("")}\n\nבפרויקט ${item.projName} תחום ${field.fieldName} מועבר לאישורכם ראו הצעות היועצים.\nהמלצתנו להתקשרות עם יועץ "${recommendedName}"`;
           const body = `${stmIntro}\n\n${stmOutro}`;
-          const htmlBody = buildEmailHtml(stmIntro, ["יועץ","סוג תשלום","ערך","הערות"], tableRows.length ? tableRows : [["אין יועצים","","",""]], stmOutro, rowHighlights);
+          const htmlBody = buildEmailHtml(stmIntro, ["יועץ","סוג תשלום","סכום","הערות"], tableRows.length ? tableRows : [["אין יועצים","","",""]], stmOutro, rowHighlights);
           return { body, htmlBody, toEmail: "" };
         }
       }
@@ -7592,12 +7597,14 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
         if (field) {
           const consultants = (field.consultants||[]).filter(c => c.name);
           const recommendedName = item.label || consultants.find(c => c.recommended || c.sentToMunicipality)?.name || "";
-          const tableRows = consultants.map(c => [c.name||"—", c.payType||"—", c.payType==="אחוזים" ? `${c.value||0}%` : fmt(c.value), c.notes||""]);
+          const _cEstMc = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || 0;
+          const _feeRowMc = c => { const fee = (_cEstMc && c.payType==="אחוזים") ? _cEstMc * Number(c.value||0) / 100 : null; return fee ? fmt(fee) : (c.payType==="אחוזים" ? `${c.value||0}%` : fmt(c.value)); };
+          const tableRows = consultants.map(c => [c.name||"—", c.payType||"—", _feeRowMc(c), c.notes||""]);
           const rowHighlights = consultants.map(c => c.recommended || c.sentToMunicipality);
           const mcOutro = "בברכה,";
           const mcIntro = `${greet("")}\n\nבפרויקט ${item.projName} תחום ${field.fieldName} מועבר לאישורכם ראו הצעות היועצים.\nהמלצתנו להתקשרות עם יועץ "${recommendedName}"`;
           const body = `${mcIntro}\n\n${mcOutro}`;
-          const htmlBody = buildEmailHtml(mcIntro, ["יועץ","סוג תשלום","ערך","הערות"], tableRows.length ? tableRows : [["אין יועצים","","",""]], mcOutro, rowHighlights);
+          const htmlBody = buildEmailHtml(mcIntro, ["יועץ","סוג תשלום","סכום","הערות"], tableRows.length ? tableRows : [["אין יועצים","","",""]], mcOutro, rowHighlights);
           return { body, htmlBody, toEmail: "" };
         }
       }
