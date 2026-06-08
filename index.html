@@ -1499,15 +1499,15 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
                 </td>
                 {/* שם */}
                 <td style={{ padding:"10px 12px", minWidth:180, position:"relative" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:4, direction:"rtl" }}>
+                  <NameSearchInput
+                    value={c.name}
+                    suppliers={fieldSuppliers}
+                    isBold={c.recommended || c.approved}
+                    onSelect={name => updateC(c.id, "name", name)}
+                  />
+                  <span style={{ position:"absolute", top:"50%", right:6, transform:"translateY(-50%)", pointerEvents:"none" }}>
                     <RatingBadge name={c.name} suppliers={suppliers} />
-                    <NameSearchInput
-                      value={c.name}
-                      suppliers={fieldSuppliers}
-                      isBold={c.recommended || c.approved}
-                      onSelect={name => updateC(c.id, "name", name)}
-                    />
-                  </div>
+                  </span>
                 </td>
                 {/* סוג תשלום */}
                 <td style={{ padding:"10px 12px", minWidth:110 }}>
@@ -5778,8 +5778,9 @@ function SuppliersPage({ suppliers, setSuppliers, professions, projects, allData
                     onClick={() => setProfileSupplier(s)}
                     style={{ background: c&&!isFirst?"#F7F8FA":bg, borderBottom: isLast?"1px solid #E2E5EA":"1px solid #EAF1FA", cursor:"pointer" }}>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A", verticalAlign:"top" }}>{isFirst ? (toFieldArr(s.field).join(", ") || "—") : ""}</td>
-                    <td style={{ padding:"10px 16px", fontWeight: isFirst?700:400, color: isFirst?"#0D0D0D":"#767676", verticalAlign:"top" }}>
-                      {isFirst ? <span style={{ display:"flex", alignItems:"center", gap:5, direction:"rtl" }}><RatingBadge name={s.name} suppliers={suppliers} />{s.name}</span> : ""}
+                    <td style={{ padding:"10px 16px", fontWeight: isFirst?700:400, color: isFirst?"#0D0D0D":"#767676", verticalAlign:"top", position:"relative" }}>
+                      {isFirst ? s.name : ""}
+                      {isFirst ? <span style={{ position:"absolute", top:"50%", right:6, transform:"translateY(-50%)", pointerEvents:"none" }}><RatingBadge name={s.name} suppliers={suppliers} /></span> : null}
                     </td>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A" }}>{c ? (c.contact||"—") : "—"}</td>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A" }}>{c ? (c.phone||"—") : "—"}</td>
