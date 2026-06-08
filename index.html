@@ -1499,14 +1499,14 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
                 </td>
                 {/* שם */}
                 <td style={{ padding:"10px 12px", minWidth:180, position:"relative" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:4, direction:"rtl" }}>
+                    <RatingBadge name={c.name} suppliers={suppliers} />
                     <NameSearchInput
                       value={c.name}
                       suppliers={fieldSuppliers}
                       isBold={c.recommended || c.approved}
                       onSelect={name => updateC(c.id, "name", name)}
                     />
-                    <RatingBadge name={c.name} suppliers={suppliers} />
                   </div>
                 </td>
                 {/* סוג תשלום */}
@@ -5432,7 +5432,7 @@ function RatingBadge({ name, suppliers }) {
   const avg = getSupplierAvg(name, suppliers);
   if (avg === null) return null;
   return (
-    <span style={{ fontSize:11, color:"#F5A623", fontWeight:700, marginRight:5, whiteSpace:"nowrap" }}>
+    <span style={{ fontSize:13, color:"#0D0D0D", fontWeight:700, marginLeft:6, whiteSpace:"nowrap", flexShrink:0 }}>
       ★{avg.toFixed(1)}
     </span>
   );
@@ -5779,7 +5779,7 @@ function SuppliersPage({ suppliers, setSuppliers, professions, projects, allData
                     style={{ background: c&&!isFirst?"#F7F8FA":bg, borderBottom: isLast?"1px solid #E2E5EA":"1px solid #EAF1FA", cursor:"pointer" }}>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A", verticalAlign:"top" }}>{isFirst ? (toFieldArr(s.field).join(", ") || "—") : ""}</td>
                     <td style={{ padding:"10px 16px", fontWeight: isFirst?700:400, color: isFirst?"#0D0D0D":"#767676", verticalAlign:"top" }}>
-                      {isFirst ? <span style={{ display:"flex", alignItems:"center", gap:5 }}>{s.name}<RatingBadge name={s.name} suppliers={suppliers} /></span> : ""}
+                      {isFirst ? <span style={{ display:"flex", alignItems:"center", gap:5, direction:"rtl" }}><RatingBadge name={s.name} suppliers={suppliers} />{s.name}</span> : ""}
                     </td>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A" }}>{c ? (c.contact||"—") : "—"}</td>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A" }}>{c ? (c.phone||"—") : "—"}</td>
