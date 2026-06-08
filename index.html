@@ -1499,13 +1499,15 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
                 </td>
                 {/* שם */}
                 <td style={{ padding:"10px 12px", minWidth:180, position:"relative" }}>
-                  <NameSearchInput
-                    value={c.name}
-                    suppliers={fieldSuppliers}
-                    isBold={c.recommended || c.approved}
-                    onSelect={name => updateC(c.id, "name", name)}
-                  />
-                  <RatingBadge name={c.name} suppliers={suppliers} />
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <NameSearchInput
+                      value={c.name}
+                      suppliers={fieldSuppliers}
+                      isBold={c.recommended || c.approved}
+                      onSelect={name => updateC(c.id, "name", name)}
+                    />
+                    <RatingBadge name={c.name} suppliers={suppliers} />
+                  </div>
                 </td>
                 {/* סוג תשלום */}
                 <td style={{ padding:"10px 12px", minWidth:110 }}>
@@ -5305,20 +5307,50 @@ function RatingsTab({ projectName, approvedConsultants, suppliers, setSuppliers 
     setRatings(prev => ({ ...prev, [name]: { ...prev[name], [field]: val } }));
   };
 
+  const liveAvg = (name) => {
+    const r = ratings[name];
+    if (!r) return null;
+    const svc = Number(r.service), pro = Number(r.professionalism);
+    if (!svc || !pro) return null;
+    return ((svc + pro) / 2).toFixed(1);
+  };
+
   const handleSave = () => {
-    setSuppliers(prev => prev.map(sup => {
-      const r = ratings[sup.name];
-      if (!r || (!r.service && !r.professionalism)) return sup;
-      const svc = Number(r.service), pro = Number(r.professionalism);
-      if (!svc || !pro) return sup;
-      const avg = (svc + pro) / 2;
-      const newEntry = { projectName, avg, ratedAt: Date.now() };
-      const prevRatings = sup.ratings || [];
-      const updated = prevRatings.some(rt => rt.projectName === projectName)
-        ? prevRatings.map(rt => rt.projectName === projectName ? newEntry : rt)
-        : [...prevRatings, newEntry];
-      return { ...sup, ratings: updated };
-    }));
+    setSuppliers(prev => {
+      const existingNames = new Set(prev.map(s => s.name));
+      // עדכן ספקים קיימים
+      let result = prev.map(sup => {
+        const r = ratings[sup.name];
+        if (!r) return sup;
+        const svc = Number(r.service), pro = Number(r.professionalism);
+        if (!svc || !pro) return sup;
+        const avg = (svc + pro) / 2;
+        const newEntry = { projectName, avg, ratedAt: Date.now() };
+        const prevRatings = sup.ratings || [];
+        const updatedRatings = prevRatings.some(rt => rt.projectName === projectName)
+          ? prevRatings.map(rt => rt.projectName === projectName ? newEntry : rt)
+          : [...prevRatings, newEntry];
+        return { ...sup, ratings: updatedRatings };
+      });
+      // צור ספקים חדשים ליועצים שעדיין אינם ברשימה
+      approvedConsultants.forEach(({ name, field }) => {
+        if (existingNames.has(name)) return;
+        const r = ratings[name];
+        if (!r) return;
+        const svc = Number(r.service), pro = Number(r.professionalism);
+        if (!svc || !pro) return;
+        const avg = (svc + pro) / 2;
+        result = [...result, {
+          id: Date.now() + Math.random(),
+          name,
+          field: field || "",
+          notes: "",
+          contacts: [],
+          ratings: [{ projectName, avg, ratedAt: Date.now() }]
+        }];
+      });
+      return result;
+    });
     setSaved(true);
   };
 
@@ -5343,6 +5375,7 @@ function RatingsTab({ projectName, approvedConsultants, suppliers, setSuppliers 
               <th style={thStyle}>יועץ</th>
               <th style={{ ...thStyle, textAlign:"center", width:110 }}>שירות / זמינות</th>
               <th style={{ ...thStyle, textAlign:"center", width:110 }}>מקצועיות</th>
+              <th style={{ ...thStyle, textAlign:"center", width:90 }}>ממוצע פרויקט</th>
               <th style={{ ...thStyle, textAlign:"center", width:100 }}>ממוצע כולל</th>
             </tr>
           </thead>
@@ -5369,6 +5402,10 @@ function RatingsTab({ projectName, approvedConsultants, suppliers, setSuppliers 
                       style={{ width:60, border:"1px solid #E2E5EA", borderRadius:4, padding:"5px 8px",
                         fontSize:13, fontFamily:"'Heebo',sans-serif", textAlign:"center", outline:"none" }}
                       onFocus={e=>e.target.style.borderColor="#163356"} onBlur={e=>e.target.style.borderColor="#E2E5EA"} />
+                  </td>
+                  <td style={{ ...tdStyle, textAlign:"center", fontWeight:700, fontSize:14,
+                    color: liveAvg(name) ? "#0B1F3A" : "#C0C0C0" }}>
+                    {liveAvg(name) ? liveAvg(name) : "—"}
                   </td>
                   <td style={{ ...tdStyle, textAlign:"center", color:"#F5A623", fontWeight:700, fontSize:14 }}>
                     {overallAvg !== null ? `★ ${overallAvg.toFixed(1)}` : "—"}
@@ -5741,7 +5778,9 @@ function SuppliersPage({ suppliers, setSuppliers, professions, projects, allData
                     onClick={() => setProfileSupplier(s)}
                     style={{ background: c&&!isFirst?"#F7F8FA":bg, borderBottom: isLast?"1px solid #E2E5EA":"1px solid #EAF1FA", cursor:"pointer" }}>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A", verticalAlign:"top" }}>{isFirst ? (toFieldArr(s.field).join(", ") || "—") : ""}</td>
-                    <td style={{ padding:"10px 16px", fontWeight: isFirst?700:400, color: isFirst?"#0D0D0D":"#767676", verticalAlign:"top" }}>{isFirst ? s.name : ""}</td>
+                    <td style={{ padding:"10px 16px", fontWeight: isFirst?700:400, color: isFirst?"#0D0D0D":"#767676", verticalAlign:"top" }}>
+                      {isFirst ? <span style={{ display:"flex", alignItems:"center", gap:5 }}>{s.name}<RatingBadge name={s.name} suppliers={suppliers} /></span> : ""}
+                    </td>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A" }}>{c ? (c.contact||"—") : "—"}</td>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A" }}>{c ? (c.phone||"—") : "—"}</td>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A" }}>{c ? (c.phone2||"—") : "—"}</td>
