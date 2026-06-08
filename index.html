@@ -965,18 +965,27 @@ const buildQuoteTableData = (consultants, calcFeeOrNull, highlightFn) => {
   const hasAnySub = allDescs.length > 0;
 
   if (!hasAnySub) {
-    // מבנה מקורי — 4 עמודות
+    const hasAnyPct = consultants.some(c => c.payType === "אחוזים");
     const rows = consultants.flatMap(c => {
       const fee = calcFeeOrNull ? calcFeeOrNull(c) : null;
       const hasSub = (c.subItems||[]).length > 0;
       const subTotal = hasSub ? (c.subItems||[]).reduce((s,it)=>s+Number(it.amount||0),0) : null;
-      const amtVal = fee ? fmt(fee) : (c.payType==="אחוזים" ? `${c.value||0}%` : fmt(hasSub ? subTotal : c.value));
-      const mainRow = [c.name||"—", c.payType||"—", amtVal, c.notes||""];
+      const pctVal = c.payType === "אחוזים" ? `${c.value||0}%` : "";
+      const amtVal = fee ? fmt(fee) : (c.payType !== "אחוזים" ? fmt(hasSub ? subTotal : c.value) : "—");
+      const mainRow = hasAnyPct
+        ? [c.name||"—", c.payType||"—", pctVal, amtVal, c.notes||""]
+        : [c.name||"—", c.payType||"—", amtVal, c.notes||""];
       if (!hasSub) return [mainRow];
-      return [mainRow, ...c.subItems.map(it => [`  ↳ ${it.description||""}`, "", fmt(it.amount), ""])];
+      const subRows = c.subItems.map(it => hasAnyPct
+        ? [`  ↳ ${it.description||""}`, "", "", fmt(it.amount), ""]
+        : [`  ↳ ${it.description||""}`, "", fmt(it.amount), ""]);
+      return [mainRow, ...subRows];
     });
     const rowHighlights = consultants.flatMap(c => [!!(highlightFn&&highlightFn(c)), ...(c.subItems||[]).map(()=>false)]);
-    return { headers: ["יועץ", "סוג תשלום", "סכום", "הערות"], rows, rowHighlights };
+    const headers = hasAnyPct
+      ? ["יועץ", "סוג תשלום", "ערך", "סכום", "הערות"]
+      : ["יועץ", "סוג תשלום", "סכום", "הערות"];
+    return { headers, rows, rowHighlights };
   }
 
   // sub-items כעמודות
@@ -7481,14 +7490,22 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
         if (field) {
           const consultants = (field.consultants||[]).filter(c => c.name);
           const _cEst = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || 0;
-          const _feeRow = c => { const fee = (_cEst && c.payType==="אחוזים") ? _cEst * Number(c.value||0) / 100 : null; return fee ? fmt(fee) : (c.payType==="אחוזים" ? `${c.value||0}%` : fmt(c.value)); };
-          const tableRows = consultants.map(c => [c.name||"—", c.payType||"—", _feeRow(c), c.notes||""]);
+          const _hasPctRec = consultants.some(c => c.payType === "אחוזים");
+          const tableRows = consultants.map(c => {
+            const fee = (_cEst && c.payType==="אחוזים") ? _cEst * Number(c.value||0) / 100 : null;
+            const amtVal = fee ? fmt(fee) : (c.payType !== "אחוזים" ? fmt(c.value) : "—");
+            return _hasPctRec
+              ? [c.name||"—", c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:"", amtVal, c.notes||""]
+              : [c.name||"—", c.payType||"—", amtVal, c.notes||""];
+          });
+          const _recHeaders = _hasPctRec ? ["יועץ","סוג תשלום","ערך","סכום","הערות"] : ["יועץ","סוג תשלום","סכום","הערות"];
           const _domName = _domainMgrR?.name  || "";
           const _domTo   = _domainMgrR?.email || "";
           const recOutro = "נא אישורכם ליועץ.\n\nבברכה,\nמערכת CostPilot";
           const intro = `${greet(_domName)}\n\nבפרויקט ${item.projName} תחום ${field.fieldName} מוכן לבחירת יועץ מומלץ.\nלהלן הצעות היועצים שהתקבלו:`;
           const body = `${intro}\n\n${recOutro}`;
-          const htmlBody = buildEmailHtml(intro, ["יועץ","סוג תשלום","סכום","הערות"], tableRows.length ? tableRows : [["אין יועצים","","",""]], recOutro);
+          const _recEmptyRow = _recHeaders.map((_,i) => i===0?"אין יועצים":"");
+          const htmlBody = buildEmailHtml(intro, _recHeaders, tableRows.length ? tableRows : [_recEmptyRow], recOutro);
           return { body, htmlBody, toEmail: _domTo };
         }
       }
@@ -7500,13 +7517,21 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
           const consultants = (field.consultants||[]).filter(c => c.name);
           const recommendedName = item.label || consultants.find(c => c.recommended)?.name || "";
           const _cEstStm = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || 0;
-          const _feeRowStm = c => { const fee = (_cEstStm && c.payType==="אחוזים") ? _cEstStm * Number(c.value||0) / 100 : null; return fee ? fmt(fee) : (c.payType==="אחוזים" ? `${c.value||0}%` : fmt(c.value)); };
-          const tableRows = consultants.map(c => [c.name||"—", c.payType||"—", _feeRowStm(c), c.notes||""]);
+          const _hasPctStm = consultants.some(c => c.payType === "אחוזים");
+          const tableRows = consultants.map(c => {
+            const fee = (_cEstStm && c.payType==="אחוזים") ? _cEstStm * Number(c.value||0) / 100 : null;
+            const amtVal = fee ? fmt(fee) : (c.payType !== "אחוזים" ? fmt(c.value) : "—");
+            return _hasPctStm
+              ? [c.name||"—", c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:"", amtVal, c.notes||""]
+              : [c.name||"—", c.payType||"—", amtVal, c.notes||""];
+          });
+          const _stmHeaders = _hasPctStm ? ["יועץ","סוג תשלום","ערך","סכום","הערות"] : ["יועץ","סוג תשלום","סכום","הערות"];
           const rowHighlights = consultants.map(c => c.recommended);
           const stmOutro = "בברכה,";
           const stmIntro = `${greet("")}\n\nבפרויקט ${item.projName} תחום ${field.fieldName} מועבר לאישורכם ראו הצעות היועצים.\nהמלצתנו להתקשרות עם יועץ "${recommendedName}"`;
           const body = `${stmIntro}\n\n${stmOutro}`;
-          const htmlBody = buildEmailHtml(stmIntro, ["יועץ","סוג תשלום","סכום","הערות"], tableRows.length ? tableRows : [["אין יועצים","","",""]], stmOutro, rowHighlights);
+          const _stmEmptyRow = _stmHeaders.map((_,i) => i===0?"אין יועצים":"");
+          const htmlBody = buildEmailHtml(stmIntro, _stmHeaders, tableRows.length ? tableRows : [_stmEmptyRow], stmOutro, rowHighlights);
           return { body, htmlBody, toEmail: "" };
         }
       }
@@ -7598,13 +7623,21 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
           const consultants = (field.consultants||[]).filter(c => c.name);
           const recommendedName = item.label || consultants.find(c => c.recommended || c.sentToMunicipality)?.name || "";
           const _cEstMc = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || 0;
-          const _feeRowMc = c => { const fee = (_cEstMc && c.payType==="אחוזים") ? _cEstMc * Number(c.value||0) / 100 : null; return fee ? fmt(fee) : (c.payType==="אחוזים" ? `${c.value||0}%` : fmt(c.value)); };
-          const tableRows = consultants.map(c => [c.name||"—", c.payType||"—", _feeRowMc(c), c.notes||""]);
+          const _hasPctMc = consultants.some(c => c.payType === "אחוזים");
+          const tableRows = consultants.map(c => {
+            const fee = (_cEstMc && c.payType==="אחוזים") ? _cEstMc * Number(c.value||0) / 100 : null;
+            const amtVal = fee ? fmt(fee) : (c.payType !== "אחוזים" ? fmt(c.value) : "—");
+            return _hasPctMc
+              ? [c.name||"—", c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:"", amtVal, c.notes||""]
+              : [c.name||"—", c.payType||"—", amtVal, c.notes||""];
+          });
+          const _mcHeaders = _hasPctMc ? ["יועץ","סוג תשלום","ערך","סכום","הערות"] : ["יועץ","סוג תשלום","סכום","הערות"];
           const rowHighlights = consultants.map(c => c.recommended || c.sentToMunicipality);
           const mcOutro = "בברכה,";
           const mcIntro = `${greet("")}\n\nבפרויקט ${item.projName} תחום ${field.fieldName} מועבר לאישורכם ראו הצעות היועצים.\nהמלצתנו להתקשרות עם יועץ "${recommendedName}"`;
           const body = `${mcIntro}\n\n${mcOutro}`;
-          const htmlBody = buildEmailHtml(mcIntro, ["יועץ","סוג תשלום","סכום","הערות"], tableRows.length ? tableRows : [["אין יועצים","","",""]], mcOutro, rowHighlights);
+          const _mcEmptyRow = _mcHeaders.map((_,i) => i===0?"אין יועצים":"");
+          const htmlBody = buildEmailHtml(mcIntro, _mcHeaders, tableRows.length ? tableRows : [_mcEmptyRow], mcOutro, rowHighlights);
           return { body, htmlBody, toEmail: "" };
         }
       }
