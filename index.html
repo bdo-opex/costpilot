@@ -1467,6 +1467,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
             <tr style={{ borderBottom:"2px solid #E2E5EA", background:"#F7F8FA" }}>
               {[
                 { h:"המלצה", w:undefined },
+                { h:"★", w:40 },
                 { h:"שם היועץ", w:undefined },
                 { h:"סוג תשלום", w:undefined },
                 { h:"ערך", w:undefined },
@@ -1483,7 +1484,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
           <tbody>
             {field.consultants.length === 0 && (
               <tr>
-                <td colSpan={showAmtCol ? 9 : 8} style={{ padding:24, textAlign:"right", color:"#9A9A9A", fontSize:13 }}>
+                <td colSpan={showAmtCol ? 10 : 9} style={{ padding:24, textAlign:"right", color:"#9A9A9A", fontSize:13 }}>
                   אין יועצים — לחץ "הוסף יועץ"
                 </td>
               </tr>
@@ -1497,17 +1498,18 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
                   <input type="checkbox" checked={!!c.recommended} onChange={e => { updateC(c.id,"recommended",e.target.checked); if (e.target.checked) onRecommended?.(c); }}
                     style={{ width:16, height:16, cursor:"pointer", accentColor:"#444444" }} />
                 </td>
+                {/* דירוג */}
+                <td style={{ padding:"10px 4px", textAlign:"center", width:40 }}>
+                  <RatingBadge name={c.name} suppliers={suppliers} />
+                </td>
                 {/* שם */}
-                <td style={{ padding:"10px 12px", minWidth:180, position:"relative" }}>
+                <td style={{ padding:"10px 12px", minWidth:180 }}>
                   <NameSearchInput
                     value={c.name}
                     suppliers={fieldSuppliers}
                     isBold={c.recommended || c.approved}
                     onSelect={name => updateC(c.id, "name", name)}
                   />
-                  <span style={{ position:"absolute", top:"50%", right:6, transform:"translateY(-50%)", pointerEvents:"none" }}>
-                    <RatingBadge name={c.name} suppliers={suppliers} />
-                  </span>
                 </td>
                 {/* סוג תשלום */}
                 <td style={{ padding:"10px 12px", minWidth:110 }}>
@@ -5755,7 +5757,7 @@ function SuppliersPage({ suppliers, setSuppliers, professions, projects, allData
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, direction:"rtl" }}>
           <thead>
             <tr style={{ background:"#F7F8FA", borderBottom:"2px solid #E2E5EA" }}>
-              {[["מקצוע / תחום","field"],["שם ספק / חברה","name"],["איש קשר",null],["טלפון",null],["נייד",null],["מייל",null],["הערות",null],["פעולות",null]].map(([h,col])=>(
+              {[["מקצוע / תחום","field"],["★",null],["שם ספק / חברה","name"],["איש קשר",null],["טלפון",null],["נייד",null],["מייל",null],["הערות",null],["פעולות",null]].map(([h,col])=>(
                 <th key={h} onClick={col ? ()=>toggleSort(col) : undefined}
                   style={{ padding:"11px 16px", textAlign:"right", color: col?"#0B1F3A":"#767676", fontWeight:700, fontSize:11, whiteSpace:"nowrap", cursor:col?"pointer":"default", userSelect:"none" }}>
                   {h}{col && (sortDir===1?" ▲":" ▼")}
@@ -5765,7 +5767,7 @@ function SuppliersPage({ suppliers, setSuppliers, professions, projects, allData
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={8} style={{ padding:"32px", textAlign:"right", color:"#9A9A9A", fontSize:13 }}>אין ספקים עדיין — לחץ "הוסף ספק חדש"</td></tr>
+              <tr><td colSpan={9} style={{ padding:"32px", textAlign:"right", color:"#9A9A9A", fontSize:13 }}>אין ספקים עדיין — לחץ "הוסף ספק חדש"</td></tr>
             )}
             {filtered.map((s, si) => {
               const cts = s.contacts && s.contacts.length > 0 ? s.contacts : [null];
@@ -5778,9 +5780,9 @@ function SuppliersPage({ suppliers, setSuppliers, professions, projects, allData
                     onClick={() => setProfileSupplier(s)}
                     style={{ background: c&&!isFirst?"#F7F8FA":bg, borderBottom: isLast?"1px solid #E2E5EA":"1px solid #EAF1FA", cursor:"pointer" }}>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A", verticalAlign:"top" }}>{isFirst ? (toFieldArr(s.field).join(", ") || "—") : ""}</td>
-                    <td style={{ padding:"10px 16px", fontWeight: isFirst?700:400, color: isFirst?"#0D0D0D":"#767676", verticalAlign:"top", position:"relative" }}>
+                    <td style={{ padding:"10px 4px", textAlign:"center", verticalAlign:"top", width:40 }}>{isFirst ? <RatingBadge name={s.name} suppliers={suppliers} /> : null}</td>
+                    <td style={{ padding:"10px 16px", fontWeight: isFirst?700:400, color: isFirst?"#0D0D0D":"#767676", verticalAlign:"top" }}>
                       {isFirst ? s.name : ""}
-                      {isFirst ? <span style={{ position:"absolute", top:"50%", right:6, transform:"translateY(-50%)", pointerEvents:"none" }}><RatingBadge name={s.name} suppliers={suppliers} /></span> : null}
                     </td>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A" }}>{c ? (c.contact||"—") : "—"}</td>
                     <td style={{ padding:"10px 16px", color:"#3A3A3A" }}>{c ? (c.phone||"—") : "—"}</td>
@@ -5800,7 +5802,7 @@ function SuppliersPage({ suppliers, setSuppliers, professions, projects, allData
           </tbody>
           <tfoot>
             <tr style={{ background:"#F7F8FA", borderTop:"2px solid #E2E5EA" }}>
-              <td colSpan={8} style={{ padding:"8px 16px", color:"#767676", fontSize:12 }}>סה״כ {filtered.length} ספקים{search?" (מסונן)":""}</td>
+              <td colSpan={9} style={{ padding:"8px 16px", color:"#767676", fontSize:12 }}>סה״כ {filtered.length} ספקים{search?" (מסונן)":""}</td>
             </tr>
           </tfoot>
         </table>
