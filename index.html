@@ -7489,7 +7489,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
         const field = (d.quotes||[]).find(f => f.id === item.fieldId);
         if (field) {
           const consultants = (field.consultants||[]).filter(c => c.name);
-          const _cEst = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || 0;
+          const _cEst = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || Number((d.budgetState||{}).contractorEst||0);
           const _hasPctRec = consultants.some(c => c.payType === "אחוזים");
           const tableRows = consultants.map(c => {
             const fee = (_cEst && c.payType==="אחוזים") ? _cEst * Number(c.value||0) / 100 : null;
@@ -7516,7 +7516,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
         if (field) {
           const consultants = (field.consultants||[]).filter(c => c.name);
           const recommendedName = item.label || consultants.find(c => c.recommended)?.name || "";
-          const _cEstStm = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || 0;
+          const _cEstStm = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || Number((d.budgetState||{}).contractorEst||0);
           const _hasPctStm = consultants.some(c => c.payType === "אחוזים");
           const tableRows = consultants.map(c => {
             const fee = (_cEstStm && c.payType==="אחוזים") ? _cEstStm * Number(c.value||0) / 100 : null;
@@ -7622,7 +7622,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
         if (field) {
           const consultants = (field.consultants||[]).filter(c => c.name);
           const recommendedName = item.label || consultants.find(c => c.recommended || c.sentToMunicipality)?.name || "";
-          const _cEstMc = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || 0;
+          const _cEstMc = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || Number((d.budgetState||{}).contractorEst||0);
           const _hasPctMc = consultants.some(c => c.payType === "אחוזים");
           const tableRows = consultants.map(c => {
             const fee = (_cEstMc && c.payType==="אחוזים") ? _cEstMc * Number(c.value||0) / 100 : null;
