@@ -7076,8 +7076,20 @@ function CostsPage({ allData, projects, statsRows }) {
 }
 
 // ── Global page: לוח בקרה ──────────────────────────────────────────────────
-function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailSent, managers }) {
+function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailSent, managers, statsRows }) {
   const fmt = n => n ? Number(n).toLocaleString("he-IL",{maximumFractionDigits:0}) : "—";
+  // אותו חישוב שמוצג בטבלת היועצים באפליקציה (FieldGroup, סוג תשלום "אחוזים")
+  const calcConsultantFee = (c, fieldName, cEst) => {
+    if (c.payType !== "אחוזים" || !cEst) return null;
+    const pct = Number(c.value||0) / 100;
+    const devPct = (statsRows||[]).filter(r=>(r.field||"").includes("פיתוח")||(r.field||"").includes("נוף")).reduce((s,r)=>s+Number(r.pct||0),0);
+    const archBase = cEst - cEst * devPct / 100;
+    const fn = (fieldName||"").trim();
+    if (["אדריכל","אדריכלות","אדריכלים"].includes(fn)) return archBase * pct;
+    if (fn.includes("מנהל פרויקט")) return cEst * pct;
+    const pp = Number((statsRows||[]).find(r=>r.field===fieldName)?.pct||0)/100;
+    return cEst * pp * pct;
+  };
   const [highlightKey, setHighlightKey] = React.useState(null);
   const [tt, setTt] = React.useState({ visible:false, text:"", x:0, y:0 });
   const showTt = (text, e) => { if (text) setTt({ visible:true, text, x:e.clientX, y:e.clientY }); };
@@ -7492,7 +7504,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
           const _cEst = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || Number((d.budgetState||{}).contractorEst||0);
           const _hasPctRec = consultants.some(c => c.payType === "אחוזים");
           const tableRows = consultants.map(c => {
-            const fee = (_cEst && c.payType==="אחוזים") ? _cEst * Number(c.value||0) / 100 : null;
+            const fee = calcConsultantFee(c, field.fieldName, _cEst);
             const amtVal = fee ? fmt(fee) : (c.payType !== "אחוזים" ? fmt(c.value) : "—");
             return _hasPctRec
               ? [c.name||"—", c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:"", amtVal, c.notes||""]
@@ -7519,7 +7531,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
           const _cEstStm = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || Number((d.budgetState||{}).contractorEst||0);
           const _hasPctStm = consultants.some(c => c.payType === "אחוזים");
           const tableRows = consultants.map(c => {
-            const fee = (_cEstStm && c.payType==="אחוזים") ? _cEstStm * Number(c.value||0) / 100 : null;
+            const fee = calcConsultantFee(c, field.fieldName, _cEstStm);
             const amtVal = fee ? fmt(fee) : (c.payType !== "אחוזים" ? fmt(c.value) : "—");
             return _hasPctStm
               ? [c.name||"—", c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:"", amtVal, c.notes||""]
@@ -7625,7 +7637,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
           const _cEstMc = Number(String((d.openingData||{}).contractorEst||"").replace(/,/g,"")) || Number((d.budgetState||{}).contractorEst||0);
           const _hasPctMc = consultants.some(c => c.payType === "אחוזים");
           const tableRows = consultants.map(c => {
-            const fee = (_cEstMc && c.payType==="אחוזים") ? _cEstMc * Number(c.value||0) / 100 : null;
+            const fee = calcConsultantFee(c, field.fieldName, _cEstMc);
             const amtVal = fee ? fmt(fee) : (c.payType !== "אחוזים" ? fmt(c.value) : "—");
             return _hasPctMc
               ? [c.name||"—", c.payType||"—", c.payType==="אחוזים"?`${c.value||0}%`:"", amtVal, c.notes||""]
@@ -9071,6 +9083,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
             projects={visibleProjects}
             milestones={milestones}
             managers={managers}
+            statsRows={statsRows}
             onMarkEmailSent={item => {
               const now = Date.now();
               setAllData(prev => {
