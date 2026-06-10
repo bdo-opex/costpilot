@@ -1239,7 +1239,19 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
           onSentToMunicipality={c => {
             if (!projectMeta) return;
             const consultants = (field.consultants||[]).filter(con => con.name);
-            const { headers: _mHeaders, rows: _mRows, rowHighlights } = buildQuoteTableData(consultants, null, con => con.id === c.id);
+            const cEst = Number(String((openingData||{}).contractorEst||"").replace(/,/g,"")) || Number((budgetState||{}).contractorEst||0);
+            const devPct = (statsRows||[]).filter(r=>(r.field||"").includes("פיתוח")||(r.field||"").includes("נוף")).reduce((s,r)=>s+Number(r.pct||0),0);
+            const archBase = cEst - cEst * devPct / 100;
+            const calcFee = con => {
+              const pct = Number(con.value||0) / 100;
+              const fn = field.fieldName || "";
+              if (!cEst || !pct) return 0;
+              if (["אדריכל","אדריכלות","אדריכלים"].includes((fn||"").trim())) return archBase * pct;
+              if (fn.includes("מנהל פרויקט")) return cEst * pct;
+              const pp = Number((statsRows||[]).find(r=>r.field===fn)?.pct||0)/100;
+              return cEst * pp * pct;
+            };
+            const { headers: _mHeaders, rows: _mRows, rowHighlights } = buildQuoteTableData(consultants, calcFee, con => con.id === c.id);
             const subject = `פרויקט ${projectMeta.name} – תחום- ${field.fieldName}`;
             const intro = `שלום,\n\nבפרויקט ${projectMeta.name} תחום ${field.fieldName} מועבר לאישורכם ראו הצעות היועצים.\nהמלצתנו להתקשרות עם יועץ "${c.name}"`;
             const outro = "בברכה,";
