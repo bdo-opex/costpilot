@@ -5298,15 +5298,42 @@ const getSupplierAvg = (name, allSuppliers) => {
   return found.ratings.reduce((sum, r) => sum + r.avg, 0) / found.ratings.length;
 };
 
+// שמירה אוטומטית של דירוג יועץ לפרויקט: שני שדות מלאים = עדכון/יצירה, שניהם ריקים = הסרה, קלט חלקי = המתנה
+const persistRating = (setSuppliers, projectName, name, consultantField, r) => {
+  const svc = Number(r.service), pro = Number(r.professionalism);
+  const bothEmpty = !r.service && !r.professionalism;
+  const bothValid = svc >= 1 && svc <= 5 && pro >= 1 && pro <= 5;
+  if (!bothEmpty && !bothValid) return;
+  setSuppliers(prev => {
+    if (!prev.some(s => s.name === name)) {
+      if (bothEmpty) return prev;
+      const avg = (svc + pro) / 2;
+      return [...prev, { id: Date.now() + Math.random(), name, field: consultantField || "", notes: "", contacts: [],
+        ratings: [{ projectName, avg, service: svc, professionalism: pro, ratedAt: Date.now() }] }];
+    }
+    return prev.map(sup => {
+      if (sup.name !== name) return sup;
+      const prevRatings = sup.ratings || [];
+      const hasEntry = prevRatings.some(rt => rt.projectName === projectName);
+      if (bothEmpty) return hasEntry ? { ...sup, ratings: prevRatings.filter(rt => rt.projectName !== projectName) } : sup;
+      const avg = (svc + pro) / 2;
+      const newEntry = { projectName, avg, service: svc, professionalism: pro, ratedAt: Date.now() };
+      return { ...sup, ratings: hasEntry
+        ? prevRatings.map(rt => rt.projectName === projectName ? newEntry : rt)
+        : [...prevRatings, newEntry] };
+    });
+  });
+};
+
 function ProjectRatingModal({ projectName, approvedConsultants, suppliers, setSuppliers, onClose }) {
   const initRatings = () => {
     const init = {};
     approvedConsultants.forEach(({ name }) => {
       const sup = (suppliers||[]).find(s => s.name === name);
       const existing = sup?.ratings?.find(r => r.projectName === projectName);
+      // דירוג קיים מוצג כערך אמיתי בשדות — רשומות ישנות בלי service/professionalism נופלות ל-avg
       if (existing) {
-        // reverse-engineer service/professionalism from avg (best effort)
-        init[name] = { service: "", professionalism: "", savedAvg: existing.avg };
+        init[name] = { service: String(existing.service ?? existing.avg), professionalism: String(existing.professionalism ?? existing.avg) };
       } else {
         init[name] = { service: "", professionalism: "" };
       }
@@ -5318,25 +5345,10 @@ function ProjectRatingModal({ projectName, approvedConsultants, suppliers, setSu
   const setField = (name, field, val) => {
     const n = Number(val);
     if (val !== "" && (isNaN(n) || n < 1 || n > 5)) return;
-    setRatings(prev => ({ ...prev, [name]: { ...prev[name], [field]: val } }));
-  };
-
-  const handleSave = () => {
-    setSuppliers(prev => prev.map(sup => {
-      const r = ratings[sup.name];
-      if (!r) return sup;
-      const svc = Number(r.service), pro = Number(r.professionalism);
-      if (!r.service && !r.professionalism) return sup;
-      if ((r.service && isNaN(svc)) || (r.professionalism && isNaN(pro))) return sup;
-      const avg = (svc + pro) / 2;
-      const newEntry = { projectName, avg, ratedAt: Date.now() };
-      const prevRatings = sup.ratings || [];
-      const updated = prevRatings.some(rt => rt.projectName === projectName)
-        ? prevRatings.map(rt => rt.projectName === projectName ? newEntry : rt)
-        : [...prevRatings, newEntry];
-      return { ...sup, ratings: updated };
-    }));
-    onClose();
+    const nextR = { ...(ratings[name] || {}), [field]: val };
+    setRatings(prev => ({ ...prev, [name]: nextR }));
+    // שמירה אוטומטית — אין כפתור שמירה
+    persistRating(setSuppliers, projectName, name, approvedConsultants.find(c => c.name === name)?.field, nextR);
   };
 
   const overlay = { position:"fixed", inset:0, background:"rgba(0,0,0,0.38)", zIndex:9000, display:"flex", alignItems:"center", justifyContent:"center" };
@@ -5347,7 +5359,7 @@ function ProjectRatingModal({ projectName, approvedConsultants, suppliers, setSu
   const numInput = (name, field) => (
     <input type="number" min="1" max="5" value={ratings[name]?.[field]||""}
       onChange={e => setField(name, field, e.target.value)}
-      placeholder={field === "service" && ratings[name]?.savedAvg ? "—" : "1-5"}
+      placeholder="1-5"
       style={{ width:52, border:"1px solid #E2E5EA", borderRadius:4, padding:"4px 6px", fontSize:13,
         fontFamily:"'Heebo',sans-serif", textAlign:"center", outline:"none" }}
       onFocus={e=>e.target.style.borderColor="#163356"} onBlur={e=>e.target.style.borderColor="#E2E5EA"} />
@@ -5389,11 +5401,12 @@ function ProjectRatingModal({ projectName, approvedConsultants, suppliers, setSu
               })}
             </tbody>
           </table>
-          <div style={{ padding:"12px 20px 0", display:"flex", justifyContent:"flex-start" }}>
-            <button onClick={handleSave}
+          <div style={{ padding:"12px 20px 0", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <span style={{ fontSize:12, color:"#9A9A9A", fontFamily:"'Heebo',sans-serif" }}>הדירוג נשמר אוטומטית</span>
+            <button onClick={onClose}
               style={{ padding:"8px 22px", borderRadius:4, background:"#0B1F3A", color:"#fff", border:"none",
                 fontFamily:"'Heebo',sans-serif", fontWeight:700, fontSize:14, cursor:"pointer" }}>
-              שמור דירוגים
+              סגור
             </button>
           </div>
         </div>
@@ -5408,20 +5421,22 @@ function RatingsTab({ projectName, approvedConsultants, suppliers, setSuppliers 
     approvedConsultants.forEach(({ name }) => {
       const sup = (suppliers||[]).find(s => s.name === name);
       const existing = sup?.ratings?.find(r => r.projectName === projectName);
+      // דירוג קיים מוצג כערך אמיתי בשדות — רשומות ישנות בלי service/professionalism נופלות ל-avg
       init[name] = existing
-        ? { service: "", professionalism: "", savedAvg: existing.avg }
+        ? { service: String(existing.service ?? existing.avg), professionalism: String(existing.professionalism ?? existing.avg) }
         : { service: "", professionalism: "" };
     });
     return init;
   };
   const [ratings, setRatings] = React.useState(initRatings);
-  const [saved, setSaved] = React.useState(false);
 
   const setField = (name, field, val) => {
     const n = Number(val);
     if (val !== "" && (isNaN(n) || n < 1 || n > 5)) return;
-    setSaved(false);
-    setRatings(prev => ({ ...prev, [name]: { ...prev[name], [field]: val } }));
+    const nextR = { ...(ratings[name] || {}), [field]: val };
+    setRatings(prev => ({ ...prev, [name]: nextR }));
+    // שמירה אוטומטית — אין כפתור שמירה
+    persistRating(setSuppliers, projectName, name, approvedConsultants.find(c => c.name === name)?.field, nextR);
   };
 
   const liveAvg = (name) => {
@@ -5430,45 +5445,6 @@ function RatingsTab({ projectName, approvedConsultants, suppliers, setSuppliers 
     const svc = Number(r.service), pro = Number(r.professionalism);
     if (!svc || !pro) return null;
     return ((svc + pro) / 2).toFixed(1);
-  };
-
-  const handleSave = () => {
-    setSuppliers(prev => {
-      const existingNames = new Set(prev.map(s => s.name));
-      // עדכן ספקים קיימים
-      let result = prev.map(sup => {
-        const r = ratings[sup.name];
-        if (!r) return sup;
-        const svc = Number(r.service), pro = Number(r.professionalism);
-        if (!svc || !pro) return sup;
-        const avg = (svc + pro) / 2;
-        const newEntry = { projectName, avg, ratedAt: Date.now() };
-        const prevRatings = sup.ratings || [];
-        const updatedRatings = prevRatings.some(rt => rt.projectName === projectName)
-          ? prevRatings.map(rt => rt.projectName === projectName ? newEntry : rt)
-          : [...prevRatings, newEntry];
-        return { ...sup, ratings: updatedRatings };
-      });
-      // צור ספקים חדשים ליועצים שעדיין אינם ברשימה
-      approvedConsultants.forEach(({ name, field }) => {
-        if (existingNames.has(name)) return;
-        const r = ratings[name];
-        if (!r) return;
-        const svc = Number(r.service), pro = Number(r.professionalism);
-        if (!svc || !pro) return;
-        const avg = (svc + pro) / 2;
-        result = [...result, {
-          id: Date.now() + Math.random(),
-          name,
-          field: field || "",
-          notes: "",
-          contacts: [],
-          ratings: [{ projectName, avg, ratedAt: Date.now() }]
-        }];
-      });
-      return result;
-    });
-    setSaved(true);
   };
 
   const thStyle = { padding:"10px 14px", fontWeight:700, fontSize:12, color:"#767676", background:"#F7F8FA", borderBottom:"2px solid #E2E5EA", textAlign:"right" };
@@ -5483,7 +5459,7 @@ function RatingsTab({ projectName, approvedConsultants, suppliers, setSuppliers 
   return (
     <div style={{ flex:1, overflowY:"auto", minHeight:0, padding:"26px 30px", direction:"rtl", fontFamily:"'Heebo',sans-serif" }}>
       <h2 style={{ fontSize:20, fontWeight:800, color:"#0D0D0D", margin:"0 0 6px" }}>★ דירוג יועצים</h2>
-      <div style={{ fontSize:13, color:"#9A9A9A", marginBottom:20 }}>הזן ציונים 1–5 לכל יועץ ולחץ שמור</div>
+      <div style={{ fontSize:13, color:"#9A9A9A", marginBottom:20 }}>הזן ציונים 1–5 לכל יועץ — הדירוג נשמר אוטומטית</div>
       <div style={{ background:"#fff", border:"1px solid #E2E5EA", borderRadius:6, overflow:"hidden", maxWidth:700 }}>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
@@ -5499,7 +5475,6 @@ function RatingsTab({ projectName, approvedConsultants, suppliers, setSuppliers 
           <tbody>
             {approvedConsultants.map(({ field, name }, i) => {
               const overallAvg = getSupplierAvg(name, suppliers);
-              const existing = (suppliers||[]).find(s=>s.name===name)?.ratings?.find(r=>r.projectName===projectName);
               return (
                 <tr key={i} style={{ background: i%2===0?"#fff":"#FAFBFC" }}>
                   <td style={tdStyle}>{field}</td>
@@ -5507,7 +5482,7 @@ function RatingsTab({ projectName, approvedConsultants, suppliers, setSuppliers 
                   <td style={{ ...tdStyle, textAlign:"center" }}>
                     <input type="number" min="1" max="5" value={ratings[name]?.service||""}
                       onChange={e => setField(name, "service", e.target.value)}
-                      placeholder={existing ? String(Math.round(existing.avg)) : "1-5"}
+                      placeholder="1-5"
                       style={{ width:60, border:"1px solid #E2E5EA", borderRadius:4, padding:"5px 8px",
                         fontSize:13, fontFamily:"'Heebo',sans-serif", textAlign:"center", outline:"none" }}
                       onFocus={e=>e.target.style.borderColor="#163356"} onBlur={e=>e.target.style.borderColor="#E2E5EA"} />
@@ -5515,7 +5490,7 @@ function RatingsTab({ projectName, approvedConsultants, suppliers, setSuppliers 
                   <td style={{ ...tdStyle, textAlign:"center" }}>
                     <input type="number" min="1" max="5" value={ratings[name]?.professionalism||""}
                       onChange={e => setField(name, "professionalism", e.target.value)}
-                      placeholder={existing ? String(Math.round(existing.avg)) : "1-5"}
+                      placeholder="1-5"
                       style={{ width:60, border:"1px solid #E2E5EA", borderRadius:4, padding:"5px 8px",
                         fontSize:13, fontFamily:"'Heebo',sans-serif", textAlign:"center", outline:"none" }}
                       onFocus={e=>e.target.style.borderColor="#163356"} onBlur={e=>e.target.style.borderColor="#E2E5EA"} />
@@ -5533,14 +5508,6 @@ function RatingsTab({ projectName, approvedConsultants, suppliers, setSuppliers 
           </tbody>
         </table>
       </div>
-      <div style={{ marginTop:16, display:"flex", alignItems:"center", gap:12 }}>
-        <button onClick={handleSave}
-          style={{ padding:"9px 24px", borderRadius:4, background:"#0B1F3A", color:"#fff", border:"none",
-            fontFamily:"'Heebo',sans-serif", fontWeight:700, fontSize:14, cursor:"pointer" }}>
-          שמור דירוגים
-        </button>
-        {saved && <span style={{ color:"#1C4532", fontWeight:600, fontSize:13 }}>✓ נשמר</span>}
-      </div>
     </div>
   );
 }
@@ -5549,8 +5516,8 @@ function RatingBadge({ name, suppliers }) {
   const avg = getSupplierAvg(name, suppliers);
   if (avg === null) return null;
   return (
-    <span style={{ fontSize:13, color:"#0D0D0D", fontWeight:700, marginLeft:6, whiteSpace:"nowrap", flexShrink:0 }}>
-      ★{avg.toFixed(1)}
+    <span style={{ fontSize:13, color:"#767676", fontWeight:700, marginLeft:6, whiteSpace:"nowrap", flexShrink:0 }}>
+      ★ {avg.toFixed(1)}
     </span>
   );
 }
@@ -5559,8 +5526,7 @@ function RatingBadge({ name, suppliers }) {
 function SupplierProfileModal({ supplier, projects, allData, onClose, setSuppliers, userRole }) {
   const [collapsed, setCollapsed] = React.useState({ "הוקפא": true, "נמסר": true, "בוטל": true });
   const [activeField, setActiveField] = React.useState(null);
-  const [addingRating, setAddingRating] = React.useState(false);
-  const [ratingForm, setRatingForm] = React.useState({ projectName:"", service:"", professionalism:"" });
+  const [ratingsOpen, setRatingsOpen] = React.useState(false);
   const isAdmin = userRole?.role === "admin";
   const toggle = st => setCollapsed(p => ({ ...p, [st]: !p[st] }));
   const toFA = f => Array.isArray(f) ? f : (f ? [f] : []);
@@ -5638,63 +5604,39 @@ function SupplierProfileModal({ supplier, projects, allData, onClose, setSupplie
           return (
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
               <div style={{ display:"flex", gap:4, alignItems:"center" }}>
-                {[1,2,3,4,5].map(i => (
-                  <span key={i} style={{ fontSize:22, color: overallAvg && i <= Math.round(overallAvg) ? "#F5A623" : "#D8DCE3" }}>
-                    {overallAvg && i <= Math.round(overallAvg) ? "★" : "☆"}
-                  </span>
-                ))}
+                {/* מילוי חלקי של כוכבים לפי הדירוג המדויק (4.5 = ארבעה וחצי כוכבים) */}
+                <div style={{ position:"relative", display:"inline-block", fontSize:22, lineHeight:1, direction:"rtl" }}>
+                  <span style={{ color:"#D8DCE3", letterSpacing:3 }}>★★★★★</span>
+                  {overallAvg !== null && (
+                    <span style={{ position:"absolute", top:0, right:0, width:`${Math.max(0, Math.min(5, overallAvg)) / 5 * 100}%`, overflow:"hidden", whiteSpace:"nowrap", color:"#F5A623", letterSpacing:3, direction:"rtl" }}>★★★★★</span>
+                  )}
+                </div>
                 {overallAvg !== null
                   ? <span style={{ fontSize:13, fontWeight:700, color:"#3A3A3A", marginRight:6 }}>{overallAvg.toFixed(1)} ({ratings.length} דירוגים)</span>
                   : <span style={{ fontSize:11, color:"#B0B7C3", marginRight:6 }}>אין דירוגים עדיין</span>
                 }
               </div>
 
-              {/* Admin: ratings list + add form */}
-              {isAdmin && (
-                <div style={{ background:"#F7F8FA", borderRadius:6, padding:"10px 12px", display:"flex", flexDirection:"column", gap:8 }}>
-                  <div style={{ fontSize:11, fontWeight:700, color:"#767676", letterSpacing:1 }}>ניהול דירוגים (אדמין)</div>
-                  {ratings.map((r, idx) => (
-                    <div key={idx} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:12 }}>
-                      <span style={{ color:"#3A3A3A" }}>{r.projectName}</span>
-                      <span style={{ color:"#F5A623", fontWeight:700 }}>★ {r.avg.toFixed(1)}</span>
-                      <button onClick={() => {
-                        const updated = { ...supplier, ratings: ratings.filter((_,i) => i !== idx) };
-                        setSuppliers(prev => prev.map(s => s.id === supplier.id ? updated : s));
-                      }} style={{ background:"#F8EDED", color:"#5C2020", border:"none", borderRadius:4, padding:"2px 8px", fontSize:11, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>מחק</button>
-                    </div>
-                  ))}
-                  {!addingRating ? (
-                    <button onClick={() => setAddingRating(true)}
-                      style={{ alignSelf:"flex-start", background:"#EAF1FA", color:"#163356", border:"1.5px dashed #B8CEED", borderRadius:4, padding:"4px 12px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:700 }}>
-                      + הוסף דירוג
-                    </button>
-                  ) : (
-                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                      <input placeholder="שם פרויקט" value={ratingForm.projectName}
-                        onChange={e => setRatingForm(p => ({...p, projectName:e.target.value}))}
-                        style={{ padding:"5px 8px", border:"1.5px solid #E2E5EA", borderRadius:4, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none" }} />
-                      <div style={{ display:"flex", gap:8 }}>
-                        <input placeholder="שירות/זמינות (1-5)" value={ratingForm.service} type="number" min="1" max="5"
-                          onChange={e => setRatingForm(p => ({...p, service:e.target.value}))}
-                          style={{ padding:"5px 8px", border:"1.5px solid #E2E5EA", borderRadius:4, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", width:"50%" }} />
-                        <input placeholder="מקצועיות (1-5)" value={ratingForm.professionalism} type="number" min="1" max="5"
-                          onChange={e => setRatingForm(p => ({...p, professionalism:e.target.value}))}
-                          style={{ padding:"5px 8px", border:"1.5px solid #E2E5EA", borderRadius:4, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", width:"50%" }} />
-                      </div>
-                      <div style={{ display:"flex", gap:8 }}>
-                        <button onClick={() => {
-                          const svc = Number(ratingForm.service), pro = Number(ratingForm.professionalism);
-                          if (!ratingForm.projectName.trim() || !svc || !pro || svc<1||svc>5||pro<1||pro>5) return;
-                          const avg = (svc + pro) / 2;
-                          const newEntry = { projectName: ratingForm.projectName.trim(), avg, ratedAt: Date.now() };
-                          const updated = { ...supplier, ratings: [...ratings, newEntry] };
-                          setSuppliers(prev => prev.map(s => s.id === supplier.id ? updated : s));
-                          setRatingForm({ projectName:"", service:"", professionalism:"" });
-                          setAddingRating(false);
-                        }} style={{ background:"#0B1F3A", color:"#fff", border:"none", borderRadius:4, padding:"5px 16px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:700 }}>שמור</button>
-                        <button onClick={() => { setAddingRating(false); setRatingForm({ projectName:"", service:"", professionalism:"" }); }}
-                          style={{ background:"#F0F2F5", color:"#767676", border:"none", borderRadius:4, padding:"5px 12px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>ביטול</button>
-                      </div>
+              {/* Admin: ratings list — נפתח בלחיצה, ללא הוספה ידנית (דירוגים נוצרים רק מתוך הפרויקטים) */}
+              {isAdmin && ratings.length > 0 && (
+                <div style={{ background:"#F7F8FA", borderRadius:6, overflow:"hidden" }}>
+                  <div onClick={() => setRatingsOpen(o => !o)}
+                    style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", cursor:"pointer", userSelect:"none" }}>
+                    <span style={{ fontSize:11, fontWeight:700, color:"#767676", letterSpacing:1 }}>ניהול דירוגים (אדמין) — {ratings.length} פרויקטים</span>
+                    <span style={{ fontSize:11, color:"#767676" }}>{ratingsOpen ? "▲" : "▼"}</span>
+                  </div>
+                  {ratingsOpen && (
+                    <div style={{ padding:"0 12px 10px", display:"flex", flexDirection:"column", gap:8 }}>
+                      {ratings.map((r, idx) => (
+                        <div key={idx} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:12 }}>
+                          <span style={{ color:"#3A3A3A" }}>{r.projectName}</span>
+                          <span style={{ color:"#F5A623", fontWeight:700 }}>★ {r.avg.toFixed(1)}</span>
+                          <button onClick={() => {
+                            const updated = { ...supplier, ratings: ratings.filter((_,i) => i !== idx) };
+                            setSuppliers(prev => prev.map(s => s.id === supplier.id ? updated : s));
+                          }} style={{ background:"#F8EDED", color:"#5C2020", border:"none", borderRadius:4, padding:"2px 8px", fontSize:11, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>מחק</button>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
