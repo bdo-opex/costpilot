@@ -991,6 +991,49 @@ const buildEmailHtml = (intro, tableHeaders, tableRows, outro, rowHighlights, hi
   return `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:13px;direction:rtl;text-align:right;max-width:700px">${p(intro)}${table}${outro ? p(outro) : ""}</div>`;
 };
 
+// ── פירוט חישוב שכר טרחה בסיסי כשורות טקסט — למיילי הגדלות (כרטיס יועץ + תזכורות) ──
+const buildFeeBreakdownLines = (consultant, openingData, budgetState, statsRows) => {
+  if ((consultant?.payType) !== "אחוזים") return [];
+  const role = (consultant.role || "").trim();
+  const pct = Number(consultant.value || 0);
+  if (!pct) return [];
+  if (["אדריכל","אדריכלות","אדריכלים"].includes(role)) {
+    const contractorEst = Number(String((openingData||{}).contractorEst||"").replace(/,/g,"")) || Number((budgetState||{}).contractorEst || 0);
+    if (!contractorEst) return [];
+    const devPct = (statsRows||[]).filter(r=>(r.field||"").includes("פיתוח")||(r.field||"").includes("נוף")).reduce((s,r)=>s+Number(r.pct||0),0);
+    const manualArchBaseRaw = String((openingData||{}).archBase||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,"");
+    const manualArchBase = manualArchBaseRaw ? Number(manualArchBaseRaw) : 0;
+    const archBase = manualArchBase > 0 ? manualArchBase : contractorEst - contractorEst * devPct / 100;
+    return [
+      `בסיס לחישוב אדריכלות: ${fmt(archBase)}`,
+      `אחוז שכר טרחה אדריכל (${pct}%): × ${pct}%`,
+      `שכר טרחה בסיסי לאדריכל: ${fmt(archBase * pct / 100)}`,
+    ];
+  }
+  if (role.includes("מנהל פרויקט")) {
+    const globalEst = Number((budgetState||{}).contractorEst || 0);
+    if (!globalEst) return [];
+    const hist = consultant.contractorEstHistory;
+    const contractorEst = (hist?.length > 0) ? Number(hist[hist.length-1].amount) : globalEst;
+    return [
+      `אומדן קבלני (בסיס חישוב): ${fmt(contractorEst)}`,
+      `אחוז שכר טרחה מנהל פרויקט (${pct}%): × ${pct}%`,
+      `שכר טרחה בסיסי למנהל פרויקט: ${fmt(contractorEst * pct / 100)}`,
+    ];
+  }
+  const contractorEst = Number((budgetState||{}).contractorEst || 0);
+  if (!contractorEst) return [];
+  const profPct = Number((statsRows||[]).find(r => r.field === consultant.role)?.pct || 0);
+  if (!profPct) return [];
+  const profBase = contractorEst * profPct / 100;
+  return [
+    `אומדן קבלני (בסיס): ${fmt(contractorEst)}`,
+    `אחוז פרק ${consultant.role} (${profPct}%): ${fmt(profBase)}`,
+    `אחוז שכר טרחה יועץ (${pct}%): × ${pct}%`,
+    `שכר טרחה בסיסי: ${fmt(profBase * pct / 100)}`,
+  ];
+};
+
 // ── בונה נתוני טבלת הצעות מחיר למייל — sub-items כעמודות ────────────────────
 // consultants: מערך יועצים של התחום (רק עם שם)
 // calcFeeOrNull: פונקציה (c)=>number לחישוב שכ"ט %-ית, או null
@@ -1895,6 +1938,9 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
     return { contractorEst, profPct, profBase, conPct, conFee, noProfPct: false };
   })();
 
+  // פירוט חישוב שכר הטרחה הבסיסי למיילי הגדלות — לוגיקה משותפת עם התזכורות
+  const feeBreakdownLines = () => buildFeeBreakdownLines(consultant, openingData, budgetState, statsRows);
+
   const calcSupplement = (newEst) => {
     // הערך הישן = הערך האחרון בהיסטוריה, או הבסיס המקורי מפתיחת הפרויקט
     const getOldBase = (histKey, fallback) => {
@@ -2035,7 +2081,9 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
           ...updatedIncreases.map(x => [x.reason||"—", fmt(x.amount), x.date ? fmtDate(x.date) : "—", incStatus(x)])
         ];
         const rowHighlights = [false, ...updatedIncreases.map(x => x.id === id)];
-        const _incIntro = `שלום ${_unitName},\n\nבפרויקט ${projectMeta.name||""} התקבלה בקשה להגדלה עבור ${_incField} – ${consultant.name||""}\nסה"כ מאושר עד כה: ${fmt(approvedTotal)}\nההגדלה המבוקשת: ${fmt(increase.amount)} ₪.\nלהלן מסגרת ההתקשרות הקיימת ליועץ:`;
+        const _bd = feeBreakdownLines();
+        const _bdText = _bd.length ? `פירוט חישוב שכר הטרחה הבסיסי:\n${_bd.join("\n")}\n` : "";
+        const _incIntro = `שלום ${_unitName},\n\nבפרויקט ${projectMeta.name||""} התקבלה בקשה להגדלה עבור ${_incField} – ${consultant.name||""}\nסה"כ מאושר עד כה: ${fmt(approvedTotal)}\n${_bdText}ההגדלה המבוקשת: ${fmt(increase.amount)} ₪.\nלהלן מסגרת ההתקשרות הקיימת ליועץ:`;
         const _incOutro = "נא אישורכם להגדלה.\n\nבברכה,\nמערכת CostPilot";
         const body = `${_incIntro}\n\n${_incOutro}`;
         const htmlBody = buildEmailHtml(_incIntro, ["פרט", "סכום", "תאריך", "סטטוס"], tableRows, _incOutro, rowHighlights);
@@ -2062,7 +2110,9 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
           ...updatedIncreases.map(x => [x.reason||"—", fmt(x.amount), x.date ? fmtDate(x.date) : "—", incStatus(x)])
         ];
         const rowHighlights = [false, ...updatedIncreases.map(x => x.id === id)];
-        const _muniIntro = `שלום,\n\nבפרויקט ${projectMeta.name||""} התקבלה בקשה להגדלה עבור ${_incField} – ${consultant.name||""}\nסה"כ מאושר עד כה: ${fmt(approvedTotal)}\nההגדלה המבוקשת: ${fmt(increase.amount)} ₪.\nלהלן מסגרת ההתקשרות הקיימת ליועץ:`;
+        const _bd = feeBreakdownLines();
+        const _bdText = _bd.length ? `פירוט חישוב שכר הטרחה הבסיסי:\n${_bd.join("\n")}\n` : "";
+        const _muniIntro = `שלום,\n\nבפרויקט ${projectMeta.name||""} התקבלה בקשה להגדלה עבור ${_incField} – ${consultant.name||""}\nסה"כ מאושר עד כה: ${fmt(approvedTotal)}\n${_bdText}ההגדלה המבוקשת: ${fmt(increase.amount)} ₪.\nלהלן מסגרת ההתקשרות הקיימת ליועץ:`;
         const _muniOutro = "נא אישורכם להגדלה.\n\nבברכה,\nמערכת CostPilot";
         const body = `${_muniIntro}\n\n${_muniOutro}`;
         const htmlBody = buildEmailHtml(_muniIntro, ["פרט", "סכום", "תאריך", "סטטוס"], tableRows, _muniOutro, rowHighlights);
@@ -7444,7 +7494,9 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
             const _umTo   = _unitMgrR?.email || "";
             const _incField = con.role || con.name || "";
             const outro = "נא אישורכם להגדלה.\n\nבברכה,\nמערכת CostPilot";
-            const intro = `${greet(_umName)}\n\nבפרויקט ${item.projName||""} התקבלה בקשה להגדלה עבור ${_incField} – ${con.name||""}\nסה"כ מאושר עד כה: ${fmt(approvedTotal)}\nההגדלה המבוקשת: ${fmt(increase.amount)} ₪.\nלהלן מסגרת ההתקשרות הקיימת ליועץ:`;
+            const _bd = buildFeeBreakdownLines(con, d.openingData||{}, d.budgetState||{}, statsRows);
+            const _bdText = _bd.length ? `פירוט חישוב שכר הטרחה הבסיסי:\n${_bd.join("\n")}\n` : "";
+            const intro = `${greet(_umName)}\n\nבפרויקט ${item.projName||""} התקבלה בקשה להגדלה עבור ${_incField} – ${con.name||""}\nסה"כ מאושר עד כה: ${fmt(approvedTotal)}\n${_bdText}ההגדלה המבוקשת: ${fmt(increase.amount)} ₪.\nלהלן מסגרת ההתקשרות הקיימת ליועץ:`;
             const body = `${intro}\n\n${outro}`;
             const htmlBody = buildEmailHtml(intro, ["פרט","סכום","תאריך","סטטוס"], tableRows, outro, rowHighlights);
             return { body, htmlBody, toEmail: _umTo };
@@ -7720,7 +7772,9 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
             const rowHighlights = [false, ...incs.map(x => x.id === item.increaseId)];
             const _miIncField = con.role || con.name || "";
             const miOutro = "נא אישורכם להגדלה.\n\nבברכה,\nמערכת CostPilot";
-            const intro = `${greet("")}\n\nבפרויקט ${item.projName||""} התקבלה בקשה להגדלה עבור ${_miIncField} – ${con.name||""}\nסה"כ מאושר עד כה: ${fmt(approvedTotal)}\nההגדלה המבוקשת: ${fmt(increase.amount)} ₪.\nלהלן מסגרת ההתקשרות הקיימת ליועץ:`;
+            const _bd = buildFeeBreakdownLines(con, d.openingData||{}, d.budgetState||{}, statsRows);
+            const _bdText = _bd.length ? `פירוט חישוב שכר הטרחה הבסיסי:\n${_bd.join("\n")}\n` : "";
+            const intro = `${greet("")}\n\nבפרויקט ${item.projName||""} התקבלה בקשה להגדלה עבור ${_miIncField} – ${con.name||""}\nסה"כ מאושר עד כה: ${fmt(approvedTotal)}\n${_bdText}ההגדלה המבוקשת: ${fmt(increase.amount)} ₪.\nלהלן מסגרת ההתקשרות הקיימת ליועץ:`;
             const body = `${intro}\n\n${miOutro}`;
             const htmlBody = buildEmailHtml(intro, ["פרט","סכום","תאריך","סטטוס"], tableRows, miOutro, rowHighlights);
             return { body, htmlBody, toEmail: "" };
