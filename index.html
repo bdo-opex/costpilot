@@ -6,13 +6,13 @@
   <title>CostPilot v2</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" integrity="sha384-tMH8h3BGESGckSAVGZ82T9n90ztNXxvdwvdM6UoR56cYcf+0iGXBliJ29D+wZ/x8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" integrity="sha384-bm7MnzvK++ykSwVJ2tynSE5TRdN+xL418osEVF2DE/L/gfWHj91J2Sphe582B1Bh" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js" integrity="sha384-aGlMNK3U/x0wl4lEH5jD1PGhJlX9hApuPmIiA5gtiYCOQ1J8ejIdC0btaU/TMoBD" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js" integrity="sha384-OUW9euuUyxyHcAhTqbhI+Iyb8LMssXt/cpz0yXhs9UWG2/R/uaWdakx/4cfww7Vb" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js" integrity="sha384-nFoSjZIoH3CCp8W639jJyQkuPHinJ2NHe7on1xvlUA7SuGfJAfvMldrsoAVm6ECz" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script type="module">
     // Suppress Babel warning
     const _warn = console.warn.bind(console);
@@ -5016,14 +5016,57 @@ function migrateSuppliers(rows) {
   return order.map(k => map[k]);
 }
 
+// ── ניקוי HTML למניעת XSS מאוחסן ─────────────────────────────────────────────
+// מסיר תגים מסוכנים, מאפייני on* (onerror/onclick...) ופרוטוקולים מסוכנים (javascript:).
+// משמש עבור תוכן rich-text שנשמר משותף בין משתמשים (workScopes).
+const sanitizeHtml = (dirty) => {
+  if (!dirty) return "";
+  const ALLOWED_TAGS = new Set(["B","STRONG","I","EM","U","S","P","BR","DIV","SPAN","UL","OL","LI","A","H1","H2","H3","H4","BLOCKQUOTE","FONT"]);
+  const SAFE_URL = /^(https?:|mailto:|tel:|\/|#|$)/i;
+  const tpl = document.implementation.createHTMLDocument("sanitize");
+  const root = tpl.body;
+  root.innerHTML = dirty;
+  const walk = (node) => {
+    const kids = Array.from(node.childNodes);
+    for (const child of kids) {
+      if (child.nodeType === 1) { // element
+        if (!ALLOWED_TAGS.has(child.tagName)) {
+          // תג לא מורשה: שמור את התוכן הפנימי, זרוק את התג עצמו
+          while (child.firstChild) node.insertBefore(child.firstChild, child);
+          node.removeChild(child);
+          continue;
+        }
+        // נקה מאפיינים מסוכנים
+        for (const attr of Array.from(child.attributes)) {
+          const name = attr.name.toLowerCase();
+          if (name.startsWith("on")) { child.removeAttribute(attr.name); continue; }
+          if ((name === "href" || name === "src") && !SAFE_URL.test((attr.value || "").trim())) {
+            child.removeAttribute(attr.name); continue;
+          }
+          if (name === "style" && /expression|url\s*\(|javascript:/i.test(attr.value || "")) {
+            child.removeAttribute(attr.name); continue;
+          }
+        }
+        walk(child);
+      } else if (child.nodeType !== 3) {
+        // לא טקסט ולא אלמנט (תגובות וכו') — הסר
+        node.removeChild(child);
+      }
+    }
+  };
+  walk(root);
+  return root.innerHTML;
+};
+
 // ── RichEditor: contenteditable div שמשמר HTML ────────────────────────────────
 const RichEditor = React.memo(function RichEditor({ html, onChange, placeholder, style }) {
   const ref = React.useRef(null);
   const lastHtml = React.useRef(html);
   React.useEffect(() => {
-    if (ref.current && ref.current.innerHTML !== html) {
-      ref.current.innerHTML = html || "";
-      lastHtml.current = html || "";
+    const clean = sanitizeHtml(html);
+    if (ref.current && ref.current.innerHTML !== clean) {
+      ref.current.innerHTML = clean;
+      lastHtml.current = clean;
     }
   }, [html]);
   return (
@@ -5033,7 +5076,7 @@ const RichEditor = React.memo(function RichEditor({ html, onChange, placeholder,
       suppressContentEditableWarning
       dir="rtl"
       data-placeholder={placeholder}
-      onBlur={() => { if (onChange && ref.current) { onChange(ref.current.innerHTML); lastHtml.current = ref.current.innerHTML; } }}
+      onBlur={() => { if (onChange && ref.current) { const clean = sanitizeHtml(ref.current.innerHTML); onChange(clean); lastHtml.current = clean; } }}
       style={{ outline:"none", ...style }}
     />
   );

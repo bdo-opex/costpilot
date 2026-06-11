@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // האם המשתמש הנוכחי הוא admin — נקבע לפי מסמך ההרשאות שלו עצמו
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/userRoles/$(request.auth.uid))
+        && get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data.role == "admin";
+    }
+
+    // ── userRoles — מסמך ההרשאות לכל משתמש ────────────────────────────────────
+    // כל משתמש מאומת יכול לקרוא (כדי לטעון את ההרשאות שלו / רשימת משתמשים לאדמין).
+    // יצירה: משתמש חדש יכול ליצור את המסמך של עצמו בלבד, וכ-"user" בלבד.
+    // עדכון: admin יכול לעדכן כל מסמך; משתמש רגיל יכול לעדכן את המסמך של עצמו
+    //        אך ורק כל עוד הוא נשאר role=="user" (אסור להעלות את עצמו ל-admin).
+    // מחיקה: admin בלבד.
+    match /userRoles/{uid} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null
+                    && request.auth.uid == uid
+                    && request.resource.data.role == "user";
+      allow update: if isAdmin()
+                    || (request.auth != null
+                        && request.auth.uid == uid
+                        && request.resource.data.role == "user");
+      allow delete: if isAdmin();
+    }
+
+    // ── shared — כל נתוני האפליקציה (פרויקטים, ספקים, חברות וכו') ──────────────
+    // קריאה: כל משתמש מאומת. כתיבה: admin בלבד (משתמש רגיל = צפייה בלבד).
+    match /shared/{docId} {
+      allow read:  if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // ── notifications ─────────────────────────────────────────────────────────
+    // נכתבות אך ורק ע"י Cloud Functions (admin SDK עוקף את החוקים האלה).
+    // לקליינט: קריאה למאומתים, כתיבה ל-admin בלבד.
+    match /notifications/{notifId} {
+      allow read:  if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // ── per-user data (לא בשימוש כיום, נשמר לתאימות) ──────────────────────────
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
