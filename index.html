@@ -2971,7 +2971,7 @@ function ReasonCell({ value, onCommit }) {
   );
 }
 
-function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultantsRows, budgetState, statsRows, companyId, milestones, openInvoiceId, onNavigate, openingData, localMilestones, setLocalMilestones, projectMeta, managers }) {
+function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultantsRows, budgetState, statsRows, companyId, companyName, milestones, openInvoiceId, onNavigate, openingData, localMilestones, setLocalMilestones, projectMeta, managers }) {
 
   const [selConsultant, setSelConsultant] = useState(null);
   const [expanded, setExpanded]           = useState({});
@@ -3279,6 +3279,55 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
     if (!sel?._consultantRowId) return;
     const id = sel._consultantRowId;
     setConsultantsRows(prev => prev.map(r => r.id === id ? { ...r, noClaims: val } : r));
+  };
+
+  // ── הפקת PDF "העדר תביעות" — הצהרת הספק עם נתוני החשבון הסופי ────────────────
+  const generateNoClaimsPdf = async () => {
+    if (!sel) return;
+    if (!window.html2canvas || !window.jspdf) { alert("ספריות PDF לא נטענו. רענן את הדף ונסה שנית."); return; }
+    // קיבלנו עד כה = סך החשבונות המאושרים; היתרה = סה"כ שכר הטרחה פחות מה שהתקבל
+    const validKeys = new Set([
+      ...fieldMilestones.map(m => "m-"+m.id),
+      ...(sel.increases||[]).map(x => "i-"+x.id),
+      ...selSubItems.map(it => "s-"+it.id),
+    ]);
+    const received = rows
+      .filter(r => invMatchesField(r, sel?.field||"", sel?.name||"") && validKeys.has(r.rowKey) && r.unitManagerApproved && !r.rejected)
+      .reduce((s,r) => s + Number(r.amount||0), 0);
+    const remainder = Math.max(0, Number(sel.totalFee||0) - received);
+    const esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    const compName = companyName || "החברה העירונית";
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation:"p", unit:"pt", format:"a4" });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const div = document.createElement("div");
+    div.style.cssText = "position:absolute;top:0;left:-9999px;width:794px;padding:64px 70px;background:#fff;direction:rtl;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:2;color:#0D0D0D;box-sizing:border-box;text-align:right";
+    const pStyle = "margin:0 0 14px;direction:rtl;text-align:right;unicode-bidi:embed";
+    const liStyle = "margin:0 0 10px;direction:rtl;text-align:right;unicode-bidi:embed";
+    div.innerHTML = `
+      <h2 style="font-size:20px;font-weight:700;margin:0 0 28px;direction:rtl;text-align:center;text-decoration:underline">העדר תביעות</h2>
+      <p style="${pStyle}">אנו הח"מ <strong>${esc(sel.name)}</strong> מתכבדים בזה להגיש את החשבון הכולל והסופי (להלן "החשבון הסופי") ל<strong>${esc(compName)}</strong> בגין ייעוץ <strong>${esc(sel.field)}</strong> בפרויקט <strong>${esc(projectMeta?.name||"")}</strong> (להלן "העבודות") שביצענו בהתאם לחוזה בינינו (להלן "החוזה").</p>
+      <p style="margin:0 0 10px;direction:rtl;text-align:right;unicode-bidi:embed">הננו מצהירים ומאשרים בזאת כדלקמן:</p>
+      <div style="margin:0 0 24px">
+        <p style="${liStyle}">&#x200F;1. כי הסכום הכולל והסופי המאושר ע"י החברה תמורת העבודות הינו כמפורט בחשבון הסופי ומסתכם בסך <strong>${fmt(sel.totalFee)} ₪</strong> (להלן: "התמורה הסופית").</p>
+        <p style="${liStyle}">&#x200F;2. כי פרט לתביעות כמפורט בחשבון הסופי, אין לנו ולא תהיה לנו כל תביעה ו/או טענה מכל סוג שהוא כלפי ${esc(compName)} ו/או כלפי אלה הבאים מכוחם או מטעמם בקשר לחוזה ו/או כל הכרוך בו ו/או הנובע ממנו.</p>
+        <p style="${liStyle}">&#x200F;3. כי על חשבון התמורה הסופית קיבלנו עד כה סך של <strong>${fmt(received)} ₪</strong> ובקבלת היתרה המגיעה לנו (<strong>${fmt(remainder)} ₪</strong>) נקבל את מלוא התמורה לביצוע החוזה.</p>
+        <p style="direction:rtl;text-align:right;unicode-bidi:embed;margin:0">&#x200F;4. לכל הסכום שלעיל יתווסף מע"מ כחוק.</p>
+      </div>
+      <p style="margin:28px 0 18px;direction:rtl;text-align:right">ולראיה באנו על החתום:</p>
+      <p style="${pStyle}">שם: ____________________</p>
+      <p style="${pStyle}">חתימה + חותמת: ____________________</p>
+      <p style="margin:0;direction:rtl;text-align:right">תאריך: ____________________</p>`;
+    document.body.appendChild(div);
+    try {
+      const canvas = await window.html2canvas(div, { scale:2, useCORS:true, backgroundColor:"#fff", logging:false });
+      const imgData = canvas.toDataURL("image/png");
+      const imgH = canvas.height * pageW / canvas.width;
+      pdf.addImage(imgData, "PNG", 0, 0, pageW, imgH);
+      pdf.save(`העדר תביעות - ${sel.name||""} - ${projectMeta?.name||""}.pdf`);
+    } finally {
+      document.body.removeChild(div);
+    }
   };
 
 
@@ -3719,11 +3768,18 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
                 {sel.totalInc !== 0 && <div style={{ fontSize:13, color: sel.totalInc < 0 ? "#5C2020" : "#5C3D10" }}>סה״כ הגדלות מאושרות: <strong>{fmt(sel.totalInc)}</strong></div>}
                 <div style={{ fontSize:14, color:"#3A3A3A", fontWeight:700 }}>סה״כ שכר טרחה ליועץ: {fmt(sel.totalFee)}</div>
               </div>
-              <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, fontWeight:600, color: sel.noClaims ? "#3A3A3A" : "#9A9A9A", cursor:"pointer", userSelect:"none" }}>
-                <input type="checkbox" checked={!!sel.noClaims} onChange={e => setNoClaims(e.target.checked)}
-                  style={{ width:14, height:14, accentColor:"#444444", cursor:"pointer" }} />
-                העדר תביעות
-              </label>
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:8 }}>
+                <button onClick={generateNoClaimsPdf}
+                  title="יצירת מסמך העדר תביעות (PDF) עם נתוני החשבון הסופי"
+                  style={{ background:"#EAF1FA", color:"#163356", border:"1.5px solid #B8CEED", borderRadius:4, padding:"7px 14px", fontSize:12, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:700, whiteSpace:"nowrap" }}>
+                  📄 הפק העדר תביעות
+                </button>
+                <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, fontWeight:600, color: sel.noClaims ? "#3A3A3A" : "#9A9A9A", cursor:"pointer", userSelect:"none" }}>
+                  <input type="checkbox" checked={!!sel.noClaims} onChange={e => setNoClaims(e.target.checked)}
+                    style={{ width:14, height:14, accentColor:"#444444", cursor:"pointer" }} />
+                  העדר תביעות
+                </label>
+              </div>
             </div>
           </Card>
 
@@ -9515,7 +9571,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                 const _utilPct3 = _uBase3>0 ? _uTotal3/_uBase3*100 : 0;
                 return <ConsultantsTab rows={getData(selectedProj.id,"consultants")} setRows={makeTabSetter(selectedProj.id,"consultants")} quotesRows={getData(selectedProj.id,"quotes")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} openConsultantId={openConsultantId} scrollToIncreaseId={scrollToIncreaseId} suppliers={suppliers} projectName={selectedProj.name} openingData={allData[selectedProj.id]?.openingData||{}} setOpeningData={od => setAllData(prev => ({...prev, [selectedProj.id]: {...(prev[selectedProj.id]||makeProjectData()), openingData: od}}))} projectMeta={{ id:selectedProj.id, name:selectedProj.name, status:selectedProj.status, unitManager:allData[selectedProj.id]?.unitManager||"", unitManagerEmail:allData[selectedProj.id]?.unitManagerEmail||"" }} milestones={milestones} localMilestones={allData[selectedProj.id]?.localMilestones||{}} companyId={String(allData[selectedProj.id]?.companyId||"")} consultantUtilPct={_utilPct3} managers={managers} pendingBimAmount={pendingBimAmount} onClearPendingBim={() => setPendingBimAmount(0)} />;
               })()}
-              {activeTab === "accounts"    && <AccountsTab    rows={getData(selectedProj.id,"accounts")}    setRows={makeTabSetter(selectedProj.id,"accounts")} quotesRows={getData(selectedProj.id,"quotes")} consultantsRows={getData(selectedProj.id,"consultants")} setConsultantsRows={makeTabSetter(selectedProj.id,"consultants")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} companyId={allData[selectedProj.id]?.companyId||""} milestones={milestones} openInvoiceId={openInvoiceId} openingData={allData[selectedProj.id]?.openingData||{}} localMilestones={allData[selectedProj.id]?.localMilestones||{}} setLocalMilestones={val=>setAllData(prev=>({...prev,[selectedProj.id]:{...(prev[selectedProj.id]||makeProjectData()),localMilestones:val}}))} managers={managers}
+              {activeTab === "accounts"    && <AccountsTab    rows={getData(selectedProj.id,"accounts")}    setRows={makeTabSetter(selectedProj.id,"accounts")} quotesRows={getData(selectedProj.id,"quotes")} consultantsRows={getData(selectedProj.id,"consultants")} setConsultantsRows={makeTabSetter(selectedProj.id,"consultants")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} companyId={allData[selectedProj.id]?.companyId||""} companyName={companies.find(c=>String(c.id)===String(allData[selectedProj.id]?.companyId))?.name||""} milestones={milestones} openInvoiceId={openInvoiceId} openingData={allData[selectedProj.id]?.openingData||{}} localMilestones={allData[selectedProj.id]?.localMilestones||{}} setLocalMilestones={val=>setAllData(prev=>({...prev,[selectedProj.id]:{...(prev[selectedProj.id]||makeProjectData()),localMilestones:val}}))} managers={managers}
                 projectMeta={{ id:selectedProj.id, name:selectedProj.name, status:selectedProj.status, planningManager:allData[selectedProj.id]?.planningManager||"", planningManagerEmail:allData[selectedProj.id]?.planningManagerEmail||"", executionManager:allData[selectedProj.id]?.executionManager||"", executionManagerEmail:allData[selectedProj.id]?.executionManagerEmail||"", unitManager:allData[selectedProj.id]?.unitManager||"", unitManagerEmail:allData[selectedProj.id]?.unitManagerEmail||"" }}
                 onNavigate={(tab, consultantId) => {
                   setActiveTab(tab);
