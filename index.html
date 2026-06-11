@@ -1006,7 +1006,7 @@ const buildFeeBreakdownLines = (consultant, openingData, budgetState, statsRows)
     const archBase = manualArchBase > 0 ? manualArchBase : contractorEst - contractorEst * devPct / 100;
     return [
       `בסיס לחישוב אדריכלות: ${fmt(archBase)}`,
-      `אחוז שכר טרחה אדריכל (${pct}%): × ${pct}%`,
+      `אחוז שכר טרחה: ${pct}%`,
       `שכר טרחה בסיסי לאדריכל: ${fmt(archBase * pct / 100)}`,
     ];
   }
@@ -1017,7 +1017,7 @@ const buildFeeBreakdownLines = (consultant, openingData, budgetState, statsRows)
     const contractorEst = (hist?.length > 0) ? Number(hist[hist.length-1].amount) : globalEst;
     return [
       `אומדן קבלני (בסיס חישוב): ${fmt(contractorEst)}`,
-      `אחוז שכר טרחה מנהל פרויקט (${pct}%): × ${pct}%`,
+      `אחוז שכר טרחה: ${pct}%`,
       `שכר טרחה בסיסי למנהל פרויקט: ${fmt(contractorEst * pct / 100)}`,
     ];
   }
@@ -1029,7 +1029,7 @@ const buildFeeBreakdownLines = (consultant, openingData, budgetState, statsRows)
   return [
     `אומדן קבלני (בסיס): ${fmt(contractorEst)}`,
     `אחוז פרק ${consultant.role} (${profPct}%): ${fmt(profBase)}`,
-    `אחוז שכר טרחה יועץ (${pct}%): × ${pct}%`,
+    `אחוז שכר טרחה: ${pct}%`,
     `שכר טרחה בסיסי: ${fmt(profBase * pct / 100)}`,
   ];
 };
