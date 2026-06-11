@@ -856,7 +856,7 @@ function Td({ children, bold, blue, green, red, muted }) {
 }
 
 // ── Tab: הצעות מחיר יועצים ────────────────────────────────────────────────────
-// Data shape: rows = [ { id, fieldName, consultants: [ { id, name, payType, value, notes, approved, sentToMunicipality } ] } ]
+// Data shape: rows = [ { id, fieldName, fieldNote, consultants: [ { id, name, payType, value, notes, approved, sentToMunicipality } ] } ]
 
 const PAYMENT_TYPES = ["אחוזים", "סכום קבוע", "שעתי"];
 
@@ -1249,6 +1249,7 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
           onUpdateConsultants={c => updateField(field.id, c)}
           onRename={name => updateFieldName(field.id, name)}
           onToggleReady={val => updateFieldProp(field.id, "readyToRecommend", val)}
+          onUpdateNote={val => updateFieldProp(field.id, "fieldNote", val)}
           onUpdateWorkScope={val => updateFieldWorkScope(field.id, val)}
           isHighlighted={highlightFieldId === field.id}
           budgetState={budgetState}
@@ -1309,7 +1310,7 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
   );
 }
 
-function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers, onToggleReady, isHighlighted, budgetState, openingData, statsRows, projectName, projectNumber, companyName, companyId, workScopes, onUpdateWorkScope, onSentToMunicipality, onApproved, onRecommended }) {
+function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers, onToggleReady, isHighlighted, budgetState, openingData, statsRows, projectName, projectNumber, companyName, companyId, workScopes, onUpdateWorkScope, onUpdateNote, onSentToMunicipality, onApproved, onRecommended }) {
   const emptyC = { id:0, name:"", payType:"אחוזים", value:"", notes:"", recommended:false, approved:false, sentToMunicipality:false,
                    contact:"", phone:"", phone2:"", email:"" };
   const [editingName, setEditingName] = useState(false);
@@ -1518,6 +1519,14 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
           </button>
           <DeleteButton onClick={onDelete} />
         </div>
+      </div>
+
+      {/* הערה כללית לתחום */}
+      <div style={{ padding:"7px 18px", borderBottom:"1px solid #E2E5EA", display:"flex", alignItems:"center", gap:8 }}>
+        <span style={{ fontSize:12, color:"#767676", fontWeight:600, whiteSpace:"nowrap" }}>הערה:</span>
+        <input value={field.fieldNote || ""} onChange={e => onUpdateNote?.(e.target.value)}
+          placeholder="הערה כללית לתחום..."
+          style={{ flex:1, border:"none", outline:"none", fontSize:13, fontFamily:"'Heebo',sans-serif", color:"#3A3A3A", background:"transparent", padding:"4px 0", boxSizing:"border-box" }} />
       </div>
 
       {/* Table */}
