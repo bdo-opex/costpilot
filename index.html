@@ -4746,7 +4746,7 @@ function DatePickerDMY({ value, onChange, style }) {
 }
 
 // ── Tab: תוצאות מכרז ─────────────────────────────────────────────────────────
-function TenderTab({ rows, setRows, quotesRows, consultantsRows, setConsultantsRows, budgetState, statsRows, openingData, milestones, localMilestones, companyId, onOpenConsultant }) {
+function TenderTab({ rows, setRows, quotesRows, consultantsRows, setConsultantsRows, budgetState, statsRows, openingData, milestones, localMilestones, companyId, onOpenConsultant, suppliers = [] }) {
   const [showDoc2, setShowDoc2] = useState(false);
 
   // Use ONLY opening data for initial/contract estimates (no increases)
@@ -9647,7 +9647,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                   }}
                 />;
               })()}</div>}
-              {activeTab === "tender"      && <div style={{ flex:1, overflowY:"auto", minHeight:0, padding:"26px 30px" }}><TenderTab      rows={getData(selectedProj.id,"tender")}      setRows={makeTabSetter(selectedProj.id,"tender")} quotesRows={getData(selectedProj.id,"quotes")} consultantsRows={getData(selectedProj.id,"consultants")} setConsultantsRows={makeTabSetter(selectedProj.id,"consultants")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} openingData={allData[selectedProj.id]?.openingData||{}} milestones={milestones} localMilestones={allData[selectedProj.id]?.localMilestones||{}} companyId={allData[selectedProj.id]?.companyId||""} onOpenConsultant={(id, bimAmt) => { setActiveTab("consultants"); setOpenConsultantId(id); if (bimAmt) setPendingBimAmount(bimAmt); setTimeout(() => { setOpenConsultantId(null); }, 3000); }} /></div>}
+              {activeTab === "tender"      && <div style={{ flex:1, overflowY:"auto", minHeight:0, padding:"26px 30px" }}><TenderTab      rows={getData(selectedProj.id,"tender")}      setRows={makeTabSetter(selectedProj.id,"tender")} suppliers={suppliers} quotesRows={getData(selectedProj.id,"quotes")} consultantsRows={getData(selectedProj.id,"consultants")} setConsultantsRows={makeTabSetter(selectedProj.id,"consultants")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} openingData={allData[selectedProj.id]?.openingData||{}} milestones={milestones} localMilestones={allData[selectedProj.id]?.localMilestones||{}} companyId={allData[selectedProj.id]?.companyId||""} onOpenConsultant={(id, bimAmt) => { setActiveTab("consultants"); setOpenConsultantId(id); if (bimAmt) setPendingBimAmount(bimAmt); setTimeout(() => { setOpenConsultantId(null); }, 3000); }} /></div>}
               {activeTab === "ratings" && (() => {
                 const projId = selectedProj.id;
                 const d = allData[projId] || {};
