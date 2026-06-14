@@ -727,6 +727,35 @@ const statusColor = s => ({
   "פעיל": "#0E7C6A", "הושלם": "#0B1F3A", "מושהה": "#9A9A9A"
 }[s] || "#5C3D10");
 
+// ── התאמת שם יועץ לספק הקנוני מרשימת הספקים (עמיד לתווים נסתרים ולווריאציות שם) ──
+// normName מנקה תווי פורמט/כיווניות/רוחב-אפס ומאחד רווחים (קוד-תווים מספרי, בלי תווים נסתרים בקוד).
+const _normSupName = (s) => {
+  let out = "";
+  for (const ch of String(s || "")) {
+    const cp = ch.codePointAt(0);
+    if (cp === 0x00AD || cp === 0xFEFF || (cp >= 0x200B && cp <= 0x200F) || (cp >= 0x202A && cp <= 0x202E) || (cp >= 0x2066 && cp <= 0x2069)) continue;
+    if (cp === 0x00A0 || cp === 0x202F || cp === 0x205F || cp === 0x3000 || (cp >= 0x2000 && cp <= 0x200A)) { out += " "; continue; }
+    out += ch;
+  }
+  return out.replace(/\s+/g, " ").trim().toLowerCase();
+};
+const _supTokens = name => _normSupName(name).split(" ").filter(w => w.length >= 2);
+// שני שמות שקולים: זהים אחרי נרמול, או שקבוצת המילים של אחד מוכלת באחר (≥2 מילים).
+const namesEquivalent = (a, b) => {
+  const na = _normSupName(a), nb = _normSupName(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const ta = _supTokens(a), tb = _supTokens(b);
+  if (ta.length < 2 || tb.length < 2) return false;
+  const subset = (x, y) => x.every(w => y.includes(w));
+  return subset(ta, tb) || subset(tb, ta);
+};
+// מחזיר את שם הספק הקנוני מרשימת הספקים שמתאים לשם הנתון, או את השם המקורי אם אין התאמה.
+const canonicalSupplierName = (name, suppliers) => {
+  const m = (suppliers || []).find(s => namesEquivalent(s.name, name));
+  return m ? m.name : (name || "");
+};
+
 
 const Card = React.forwardRef(function Card({ children, style, onClick, onMouseOver, onMouseOut, className }, ref) {
   return <div ref={ref} className={className} onClick={onClick} onMouseOver={onMouseOver} onMouseOut={onMouseOut} style={{ background:"#fff", border:"1px solid #E2E5EA", borderRadius:4, boxShadow:"0 1px 3px rgba(0,0,0,0.07)", padding:20, ...style }}>{children}</div>;
@@ -7118,7 +7147,7 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#F7F8FA"}">${row.ce
 }
 
 // ── Global page: השוואת עלויות ───────────────────────────────────────────────
-function CostsPage({ allData, projects, statsRows }) {
+function CostsPage({ allData, projects, statsRows, suppliers }) {
   const [filterField, setFilterField] = React.useState("");
   const [myArea, setMyArea] = React.useState("");
 
@@ -7147,7 +7176,7 @@ function CostsPage({ allData, projects, statsRows }) {
         rows.push({
           projName: proj.name,
           field: field.fieldName || "",
-          consultant: c.name,
+          consultant: canonicalSupplierName(c.name, suppliers),
           payType: c.payType || "אחוזים",
           value: c.value || "",
           fee,
@@ -9352,7 +9381,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
             suppliers={suppliers} setSuppliers={setSuppliers} />
         )}
         {!selectedProj && globalPage === "costs" && (
-          <CostsPage allData={allData} projects={visibleProjects} statsRows={statsRows} />
+          <CostsPage allData={allData} projects={visibleProjects} statsRows={statsRows} suppliers={suppliers} />
         )}
         {!selectedProj && !globalPage && (
           <div className="fade" style={{ flex:1, overflow:"hidden", display:"flex", flexDirection:"column" }}>
