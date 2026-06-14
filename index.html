@@ -478,6 +478,25 @@ function LogoBlock({ size }) {
   );
 }
 
+// ניקוי ערך-מחרוזת: מסיר תווי פורמט/כיווניות/רוחב-אפס, מאחד רווחים, trim — משמר רישיות וטקסט גלוי.
+// (קוד-תווים מספרי, בלי שום תו נסתר בקוד עצמו.)
+const _cleanStr = (s) => {
+  if (typeof s !== "string") return s;
+  let out = "";
+  for (const ch of s) {
+    const cp = ch.codePointAt(0);
+    if (cp === 0x00AD || cp === 0xFEFF || (cp >= 0x200B && cp <= 0x200F) || (cp >= 0x202A && cp <= 0x202E) || (cp >= 0x2066 && cp <= 0x2069)) continue;
+    if (cp === 0x00A0 || cp === 0x202F || cp === 0x205F || cp === 0x3000 || (cp >= 0x2000 && cp <= 0x200A)) { out += " "; continue; }
+    out += ch;
+  }
+  return out.replace(/\s+/g, " ").trim();
+};
+// payType מנוקה: ריק או "אחוזים" (אחרי ניקוי) → בדיוק "אחוזים" (עקבי עם דפוס c.payType||"אחוזים" בקוד).
+const _cleanPayType = (pt) => {
+  const c = _cleanStr(typeof pt === "string" ? pt : "");
+  return (c === "" || c === "אחוזים") ? "אחוזים" : c;
+};
+
 // Sync project data loaded from any source (Firestore, backup, import) so it behaves
 // as if all data was entered manually through the UI.
 // 1. Migrates projectNumber / planningManager / executionManager from openingData → top-level
@@ -490,6 +509,46 @@ function syncProjectData(projData) {
   if (!projData) return projData;
   let result = projData;
   let changed = false;
+
+  // ── 0. ניקוי תווים נסתרים בערכי-מחרוזת — נתונים מיובאים יתנהגו בדיוק כמו ידניים ──
+  // מנקה payType/שמות/תחומים/אומדנים כך שכל ההשוואות המדויקות בקוד (payType==="אחוזים",
+  // milestones[companyId][fieldName], statsRows.find(field===), arch/PM detection) יצליחו.
+  // ניקוי עקבי בכל המופעים שומר על קישורי חשבון↔יועץ↔תחום; משנה רק ג'אנק בלתי-נראה, לא מספרים.
+  {
+    let dirty = false;
+    const od = { ...(result.openingData || {}) };
+    ["contractorEst","municipalEst","archBase","buildingArea"].forEach(k => {
+      if (typeof od[k] === "string") { const v = _cleanStr(od[k]); if (v !== od[k]) { od[k] = v; dirty = true; } }
+    });
+    const bs = { ...(result.budgetState || {}) };
+    ["contractorEst","municipalEst"].forEach(k => {
+      if (typeof bs[k] === "string") { const v = _cleanStr(bs[k]); if (v !== bs[k]) { bs[k] = v; dirty = true; } }
+    });
+    const cQuotes = (result.quotes || []).map(fg => {
+      let fgDirty = false;
+      const fieldName = _cleanStr(fg.fieldName); if (fieldName !== fg.fieldName) { fgDirty = true; dirty = true; }
+      const consultants = (fg.consultants || []).map(c => {
+        const name = _cleanStr(c.name), payType = _cleanPayType(c.payType);
+        if (name !== c.name || payType !== c.payType) { fgDirty = true; dirty = true; return { ...c, name, payType }; }
+        return c;
+      });
+      return fgDirty ? { ...fg, fieldName, consultants } : fg;
+    });
+    const cCons = (result.consultants || []).map(c => {
+      const name = _cleanStr(c.name), role = _cleanStr(c.role), payType = _cleanPayType(c.payType);
+      if (name !== c.name || role !== c.role || payType !== c.payType) { dirty = true; return { ...c, name, role, payType }; }
+      return c;
+    });
+    const cAcc = (result.accounts || []).map(r => {
+      const consultantName = _cleanStr(r.consultantName), fieldName = _cleanStr(r.fieldName);
+      if (consultantName !== r.consultantName || fieldName !== r.fieldName) { dirty = true; return { ...r, consultantName, fieldName }; }
+      return r;
+    });
+    if (dirty) {
+      result = { ...result, openingData: od, budgetState: bs, quotes: cQuotes, consultants: cCons, accounts: cAcc };
+      changed = true;
+    }
+  }
 
   // ── 1. Migrate top-level metadata fields out of openingData ──────────────────
   const o = projData.openingData || {};
@@ -754,6 +813,33 @@ const namesEquivalent = (a, b) => {
 const canonicalSupplierName = (name, suppliers) => {
   const m = (suppliers || []).find(s => namesEquivalent(s.name, name));
   return m ? m.name : (name || "");
+};
+
+// התאמת שם-מקצוע/תחום: זהות (אחרי נרמול), או שאחד תחילית של השני (אדריכל↔אדריכלות),
+// כדי שווריאציות שם-תחום מנתונים מיובאים יתאימו לתבניות אבני הדרך / גיליון הסטטיסטיקה.
+const professionEquivalent = (a, b) => {
+  const na = _normSupName(a), nb = _normSupName(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const short = na.length <= nb.length ? na : nb;
+  const long  = na.length <= nb.length ? nb : na;
+  return short.length >= 4 && long.startsWith(short);
+};
+// מחזיר את תבנית אבני הדרך לחברה+תחום, עם סובלנות לווריאציות שם-תחום.
+const findMilestoneTemplate = (milestones, companyId, fieldName) => {
+  const company = milestones && milestones[companyId];
+  if (!company) return null;
+  if (company[fieldName]) return company[fieldName];
+  const key = Object.keys(company).find(k => professionEquivalent(k, fieldName));
+  return key ? company[key] : null;
+};
+// אחוז התחום מגיליון הסטטיסטיקה, עם סובלנות לווריאציות שם-תחום (אדריכל↔אדריכלות וכו').
+const profStatPct = (statsRows, fieldName) => {
+  const rows = statsRows || [];
+  const exact = rows.find(r => r.field === fieldName);
+  if (exact) return Number(exact.pct || 0);
+  const m = rows.find(r => professionEquivalent(r.field, fieldName));
+  return m ? Number(m.pct || 0) : 0;
 };
 
 
@@ -1052,7 +1138,7 @@ const buildFeeBreakdownLines = (consultant, openingData, budgetState, statsRows)
   }
   const contractorEst = Number((budgetState||{}).contractorEst || 0);
   if (!contractorEst) return [];
-  const profPct = Number((statsRows||[]).find(r => r.field === consultant.role)?.pct || 0);
+  const profPct = profStatPct(statsRows, consultant.role);
   if (!profPct) return [];
   const profBase = contractorEst * profPct / 100;
   return [
@@ -1199,7 +1285,7 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
       if (!cEst || !pct) return 0;
       if (["אדריכל","אדריכלות","אדריכלים"].includes((fn||"").trim())) return archBase * pct;
       if (fn.includes("מנהל פרויקט")) return cEst * pct;
-      const pp = Number((statsRows||[]).find(r=>r.field===fn)?.pct||0)/100;
+      const pp = profStatPct(statsRows, fn)/100;
       return cEst * pp * pct;
     };
     const allC = (field.consultants||[]).filter(c => c.name);
@@ -1235,7 +1321,7 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
           if (!cEst || !pct) return 0;
           if (["אדריכל","אדריכלות","אדריכלים"].includes((fn||"").trim())) return archBase * pct;
           if (fn.includes("מנהל פרויקט")) return cEst * pct;
-          const pp = Number((statsRows||[]).find(r=>r.field===fn)?.pct||0)/100;
+          const pp = profStatPct(statsRows, fn)/100;
           return cEst * pp * pct;
         };
         const consultants = (field.consultants||[]).filter(c => c.name);
@@ -1362,7 +1448,7 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
               if (!cEst || !pct) return 0;
               if (["אדריכל","אדריכלות","אדריכלים"].includes((fn||"").trim())) return archBase * pct;
               if (fn.includes("מנהל פרויקט")) return cEst * pct;
-              const pp = Number((statsRows||[]).find(r=>r.field===fn)?.pct||0)/100;
+              const pp = profStatPct(statsRows, fn)/100;
               return cEst * pp * pct;
             };
             const { headers: _mHeaders, rows: _mRows, rowHighlights } = buildQuoteTableData(consultants, calcFee, con => con.id === c.id);
@@ -1701,7 +1787,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
                     let fee = 0;
                     if (["אדריכל","אדריכלות","אדריכלים"].includes((fieldName||"").trim()) && cEst) fee = archBase * pct;
                     else if (fieldName.includes("מנהל פרויקט") && cEst) fee = cEst * pct;
-                    else if (cEst) { const pp = Number((statsRows||[]).find(r=>r.field===fieldName)?.pct||0)/100; fee = cEst * pp * pct; }
+                    else if (cEst) { const pp = profStatPct(statsRows, fieldName)/100; fee = cEst * pp * pct; }
                     return fee ? <span style={{ fontSize:12, color:"#444444" }}>{fmt(fee)}</span> : <span style={{ fontSize:11, color:"#9A9A9A" }}>—</span>;
                   })()}
                 </td>
@@ -1891,7 +1977,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
   const baseFee = consultant._liveFee ?? baseVal;
   const consultantField = (consultant.field || consultant.role || "").trim();
   const effectiveMilestones = consultantField
-    ? ((localMilestones||{})[consultantField] || (milestones||{})[companyId]?.[consultantField] || [])
+    ? ((localMilestones||{})[consultantField] || findMilestoneTemplate(milestones, companyId, consultantField) || [])
     : [];
   const planningPct = effectiveMilestones.filter(m => m.planOnly).reduce((s,m) => s + Number(m.pct||0), 0);
   const bimAmount = Math.round(baseFee * planningPct / 100 * 0.15);
@@ -1959,7 +2045,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
     if (!isOtherPct) return null;
     const contractorEst = Number((budgetState||{}).contractorEst || 0);
     if (!contractorEst) return null;
-    const profPct    = Number((statsRows||[]).find(r => r.field === consultant.role)?.pct || 0);
+    const profPct    = profStatPct(statsRows, consultant.role);
     if (!profPct) return { contractorEst, profPct: 0, profBase: 0, conPct: Number(consultant.value||0), conFee: 0, noProfPct: true };
     const profBase   = contractorEst * profPct / 100;
     const conPct     = Number(consultant.value || 0);
@@ -2625,7 +2711,7 @@ function ConsultantsTab({ rows, setRows, quotesRows, budgetState, statsRows, ope
           else if (!isPct) liveFee = Number(c.value||0);
           else if (isArch && cEst) liveFee = aBase * pct;
           else if (isPMRole && cEst) liveFee = cEst * pct;
-          else if (cEst) { const pp = Number((statsRows||[]).find(r=>r.field===fg.fieldName)?.pct||0)/100; liveFee = cEst * pp * pct; }
+          else if (cEst) { const pp = profStatPct(statsRows, fg.fieldName)/100; liveFee = cEst * pp * pct; }
           return { ...consultant, value: c.value, payType: c.payType || "אחוזים", _liveFee: liveFee, field: fg.fieldName || "" };
         }
       }
@@ -3042,7 +3128,7 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
       else if (isArch   && contractorEst)  fee = archBase * pct;
       else if (isPMRole && contractorEst)  fee = contractorEst * pct;
       else if (contractorEst) {
-        const profPct = Number((statsRows||[]).find(r=>r.field===fg.fieldName)?.pct||0) / 100;
+        const profPct = profStatPct(statsRows, fg.fieldName) / 100;
         fee = contractorEst * profPct * pct;
       }
       const consultantRow = (consultantsRows||[]).find(r => r.id === "q-"+c.id);
@@ -3085,7 +3171,7 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
   }, [openInvoiceId, consultantFees.length]);
 
   const selField = (sel?.field||"").trim();
-  const templateMilestones = (sel && companyId) ? (milestones?.[companyId]?.[selField] || []) : [];
+  const templateMilestones = (sel && companyId) ? (findMilestoneTemplate(milestones, companyId, selField) || []) : [];
   const hasLocalMs = sel ? (((localMilestones||{})[selField]?.length || 0) > 0) : false;
   const fieldMilestones = hasLocalMs ? (localMilestones[selField]||[]) : templateMilestones;
   const selSubItems = sel?.subItems||[];
@@ -3971,7 +4057,7 @@ function buildBudgetAllRows({ quotesRows, consultantsRows, budgetState, statsRow
     if (["אדריכל","אדריכלות","אדריכלים"].includes((field||"").trim()))      return archBase      * pct;
     if ((field||"").includes("מנהל פרויקט")) return contractorEst * pct;
     if (contractorEst) {
-      const profPct = Number((statsRows||[]).find(r => r.field === field)?.pct || 0) / 100;
+      const profPct = profStatPct(statsRows, field) / 100;
       return contractorEst * profPct * pct;
     }
     return 0;
@@ -4796,7 +4882,7 @@ function TenderTab({ rows, setRows, quotesRows, consultantsRows, setConsultantsR
       let sectionEst = 0;
       if (isArch && contractorEst)      sectionEst = archBase;
       else if (isPM && contractorEst)   sectionEst = contractorEst;
-      else if (contractorEst) { const pp=Number((statsRows||[]).find(r=>r.field===field.fieldName)?.pct||0)/100; sectionEst=contractorEst*pp; }
+      else if (contractorEst) { const pp=profStatPct(statsRows, field.fieldName)/100; sectionEst=contractorEst*pp; }
       // Contract base fee only — no consultant increases
       const initialFee = sectionEst * feePct / 100;
       // BIM = 15% of planning-phase portion
@@ -4807,7 +4893,7 @@ function TenderTab({ rows, setRows, quotesRows, consultantsRows, setConsultantsR
       let planningPct = 0;
       if (!isArchOrPM) {
         const effectiveMilestones = companyId
-          ? ((localMilestones||{})[field.fieldName] || (milestones||{})[companyId]?.[field.fieldName] || [])
+          ? ((localMilestones||{})[field.fieldName] || findMilestoneTemplate(milestones, companyId, field.fieldName) || [])
           : [];
         planningPct = effectiveMilestones.filter(m=>m.planOnly).reduce((s,m)=>s+Number(m.pct||0),0);
         if (hasBIM) {
@@ -5029,14 +5115,14 @@ function ContractorTab({ rows, setRows, quotesRows, tenderRows, consultantsRows,
       let sectionEst = 0;
       if (isArch && contractorEst)      sectionEst = archBase;
       else if (isPM && contractorEst)   sectionEst = contractorEst;
-      else if (contractorEst) { const pp=Number((statsRows||[]).find(r=>r.field===field.fieldName)?.pct||0)/100; sectionEst=contractorEst*pp; }
+      else if (contractorEst) { const pp=profStatPct(statsRows, field.fieldName)/100; sectionEst=contractorEst*pp; }
       const initialFee = sectionEst * feePct / 100;
       const isArchOrPM = isArch || isPM;
       const consultantRow = (consultantsRows||[]).find(r => r.id === "q-"+c.id);
       const hasBIM = !!(consultantRow?.increases||[]).some(x => x.isBIM);
       let bim = null; let planningPct = 0;
       if (!isArchOrPM && hasBIM) {
-        const ems = companyId ? ((localMilestones||{})[field.fieldName] || (milestones||{})[companyId]?.[field.fieldName] || []) : [];
+        const ems = companyId ? ((localMilestones||{})[field.fieldName] || findMilestoneTemplate(milestones, companyId, field.fieldName) || []) : [];
         planningPct = ems.filter(m=>m.planOnly).reduce((s,m)=>s+Number(m.pct||0),0);
         bim = initialFee * planningPct / 100 * 0.15;
       }
@@ -7172,7 +7258,7 @@ function CostsPage({ allData, projects, statsRows, suppliers }) {
         } else if (!isPct) fee = Number(c.value||0);
         else if (["אדריכל","אדריכלות","אדריכלים"].includes((field.fieldName||"").trim()) && cEst) fee = archBase * pct;
         else if ((field.fieldName||"").includes("מנהל פרויקט") && cEst) fee = cEst * pct;
-        else if (cEst) { const pp = Number((statsRows||[]).find(r=>r.field===field.fieldName)?.pct||0)/100; fee = cEst * pp * pct; }
+        else if (cEst) { const pp = profStatPct(statsRows, field.fieldName)/100; fee = cEst * pp * pct; }
         rows.push({
           projName: proj.name,
           field: field.fieldName || "",
@@ -7301,7 +7387,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
     const fn = (fieldName||"").trim();
     if (["אדריכל","אדריכלות","אדריכלים"].includes(fn)) return archBase * pct;
     if (fn.includes("מנהל פרויקט")) return cEst * pct;
-    const pp = Number((statsRows||[]).find(r=>r.field===fieldName)?.pct||0)/100;
+    const pp = profStatPct(statsRows, fieldName)/100;
     return cEst * pp * pct;
   };
   const [highlightKey, setHighlightKey] = React.useState(null);
@@ -7647,7 +7733,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
           const compId = String(d.companyId||"");
           const localMs = d.localMilestones || {};
           const hasLocalMs = (localMs[invFieldName]?.length || 0) > 0;
-          const fieldMilestones = hasLocalMs ? (localMs[invFieldName]||[]) : ((compId && milestones?.[compId]?.[invFieldName]) ? milestones[compId][invFieldName] : []);
+          const fieldMilestones = hasLocalMs ? (localMs[invFieldName]||[]) : (findMilestoneTemplate(milestones, compId, invFieldName) || []);
           // rowTotal — approved non-rejected invoices only
           const rowTotalFn = key => allAccounts.filter(r => r.rowKey===key && r.unitManagerApproved && !r.rejected).reduce((s,r)=>s+Number(r.amount||0),0);
           // milestoneAllocation
@@ -7788,7 +7874,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
           const compId = String(d.companyId||"");
           const localMs = d.localMilestones || {};
           const hasLocalMs = (localMs[invFieldName]?.length || 0) > 0;
-          const fieldMilestones = hasLocalMs ? (localMs[invFieldName]||[]) : ((compId && milestones?.[compId]?.[invFieldName]) ? milestones[compId][invFieldName] : []);
+          const fieldMilestones = hasLocalMs ? (localMs[invFieldName]||[]) : (findMilestoneTemplate(milestones, compId, invFieldName) || []);
           const rowTotalFn = key => allAccounts.filter(r => r.rowKey===key && r.unitManagerApproved && !r.rejected).reduce((s,r)=>s+Number(r.amount||0),0);
           const negInc = selIncreases.filter(x=>Number(x.amount||0)<0).reduce((s,x)=>s+Number(x.amount||0),0);
           const msAlloc = (() => {
@@ -8639,7 +8725,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
         (fg.consultants||[]).forEach(c => {
           if (!c.approved||!c.name?.trim()) return;
           const key = (fg.fieldName||"") + "::" + c.name.trim();
-          const ms = _localMsMap[(fg.fieldName||"").trim()] || ((cId && milestones?.[cId]) ? (milestones[cId]?.[fg.fieldName||""]||[]) : []);
+          const ms = _localMsMap[(fg.fieldName||"").trim()] || (findMilestoneTemplate(milestones, cId, fg.fieldName||"") || []);
           if (c.subItems && c.subItems.length > 0) {
             exportPlanOnlyMap[key] = (exportPlanOnlyMap[key]||0) +
               c.subItems.filter(it=>it.planOnly).reduce((s,it)=>s+Number(it.amount||0),0);
@@ -8650,7 +8736,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
             if (!isPct)                                                          fee = Number(c.value||0);
             else if (["אדריכל","אדריכלות","אדריכלים"].includes((fg.fieldName||"").trim()) && _cEst)       fee = _aBase * pct;
             else if ((fg.fieldName||"").includes("מנהל פרויקט") && _cEst)       fee = _cEst * pct;
-            else if (_cEst) { const pp = Number((statsRows||[]).find(r=>r.field===fg.fieldName)?.pct||0)/100; fee = _cEst*pp*pct; }
+            else if (_cEst) { const pp = profStatPct(statsRows, fg.fieldName)/100; fee = _cEst*pp*pct; }
             exportPlanOnlyMap[key] = (exportPlanOnlyMap[key]||0) +
               ms.filter(m=>m.planOnly).reduce((s,m)=>s+fee*Number(m.pct||0)/100, 0);
           }
@@ -8872,7 +8958,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
           let sectionEst = 0;
           if (isArch && cEst6)    sectionEst = archBase6;
           else if (isPM && cEst6) sectionEst = cEst6;
-          else if (cEst6) { const pp=Number((statsRows||[]).find(r=>r.field===field.fieldName)?.pct||0)/100; sectionEst=cEst6*pp; }
+          else if (cEst6) { const pp=profStatPct(statsRows, field.fieldName)/100; sectionEst=cEst6*pp; }
           const initialFee = sectionEst * feePct / 100;
           const consultantRow = (d.consultants||[]).find(r=>r.id==="q-"+c.id);
           const hasBIM = !!(consultantRow?.increases||[]).some(x=>x.isBIM);
@@ -8928,7 +9014,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
           let sectionEst = 0;
           if (isArch && cEst)      sectionEst = archBase;
           else if (isPM && cEst)   sectionEst = cEst;
-          else if (cEst) { const pp=Number((statsRows||[]).find(r=>r.field===field.fieldName)?.pct||0)/100; sectionEst=cEst*pp; }
+          else if (cEst) { const pp=profStatPct(statsRows, field.fieldName)/100; sectionEst=cEst*pp; }
           const initialFee = sectionEst ? sectionEst * feePct / 100 : null;
           const key = (field.fieldName||"")+"__"+(c.name.trim());
           const tSaved = tRows.find(r=>r.key===key)||{};
@@ -9661,7 +9747,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                     if (!c.approved || !c.name?.trim()) return;
                     const key = (fg.fieldName||"") + "::" + c.name.trim();
                     const fieldKey = (fg.fieldName||"").trim();
-                    const ms = localMsMap[fieldKey] || ((milestones && cId) ? (milestones[cId]?.[fieldKey] || []) : []);
+                    const ms = localMsMap[fieldKey] || (findMilestoneTemplate(milestones, cId, fieldKey) || []);
                     if (c.subItems && c.subItems.length > 0) {
                       c.subItems.filter(it => it.planOnly).forEach(it => {
                         planOnlyMap[key] = (planOnlyMap[key]||0) + Number(it.amount||0);
@@ -9672,7 +9758,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                       if (!isPct) fee = Number(c.value||0);
                       else if (["אדריכל","אדריכלות","אדריכלים"].includes(fieldKey) && cEst) fee = _archBase * Number(c.value||0)/100;
                       else if (fieldKey.includes("מנהל פרויקט") && cEst) fee = cEst * Number(c.value||0)/100;
-                      else if (cEst) { const pp = Number((statsRows||[]).find(r=>r.field===fg.fieldName)?.pct||0)/100; fee = cEst*pp*Number(c.value||0)/100; }
+                      else if (cEst) { const pp = profStatPct(statsRows, fg.fieldName)/100; fee = cEst*pp*Number(c.value||0)/100; }
                       ms.filter(m => m.planOnly).forEach(m => {
                         planOnlyMap[key] = (planOnlyMap[key]||0) + fee * Number(m.pct||0) / 100;
                       });
