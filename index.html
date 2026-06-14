@@ -6667,19 +6667,18 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
 
     const phaseName = managerType === "planning" ? "תכנון" : "ביצוע";
     const subject = `דירוג יועצים — ${proj.name} — שלב ${phaseName}`;
-    const sep = "─".repeat(60);
-    const hdr = `תחום               שם יועץ                    שירות/זמינות (1-5)    מקצועיות (1-5)`;
-    const rows = consultants.map(c => `${(c.field+"               ").slice(0,19)} ${(c.name+"                          ").slice(0,26)}`).join("\n");
-    const body = [
+    const intro = [
       `שלום${managerName ? " " + managerName : ""},`,
       "",
-      `בקשה לדרג את יועצי הפרויקט "${proj.name}" עבור שלב ${phaseName}.`,
-      "נא למלא את הניקוד (1-5) ולשלוח למנהלת המכרזים.",
-      "",
-      sep, hdr, sep, rows, sep,
+      `נבקש לדרג את יועצי הפרויקט "${proj.name}" עבור שלב ${phaseName}.`,
+      `יש למלא לכל יועץ ניקוד מ-1 עד 5 בשתי העמודות (5 = הניקוד הגבוה ביותר) ולשלוח למנהלת המכרזים.`,
     ].join("\n");
-
-    window.location.href = `mailto:${encodeURIComponent(managerEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const outro = "בברכה,";
+    const headers = ["תחום", "שם היועץ", "שירות/זמינות (1-5)", "מקצועיות (1-5)"];
+    const tableRows = consultants.map(c => [c.field, c.name, "", ""]);
+    const htmlBody = buildEmailHtml(intro, headers, tableRows, outro);
+    const body = `${intro}\n\n${consultants.map(c => `${c.field} | ${c.name} | ___ | ___`).join("\n")}\n\n${outro}`;
+    openOutlookEmail(managerEmail, subject, body, htmlBody);
   };
 
   const upd = (projId, key, val) => {
