@@ -842,6 +842,19 @@ const profStatPct = (statsRows, fieldName) => {
   return m ? Number(m.pct || 0) : 0;
 };
 
+// ── מדד "אחוז יועצים מאומדן קבלני": סכום היועצים ללא תחום "מכון בקרה" ──
+// תחום "מכון בקרה" — סובלני לווריאציות שם ולתווים נסתרים; תומך גם בשדה מערך.
+const _isInspectionInstituteField = (field) => {
+  const f = Array.isArray(field) ? field.join(" ") : field;
+  return _normSupName(f).includes(_normSupName("מכון בקרה"));
+};
+// סכום עלות שורת-יועץ (אותו ביטוי שחוזר בכל חישובי התקציב).
+const consultantRowAmount = (r) =>
+  (r.payType === "אחוזים" ? r.computedFee : r.value) + r.increases;
+// סך היועצים למדד "אחוז יועצים מאומדן קבלני" — ללא מכון בקרה.
+const consultantsUtilTotal = (rows) =>
+  (rows || []).reduce((s, r) => _isInspectionInstituteField(r.field) ? s : s + consultantRowAmount(r), 0);
+
 
 const Card = React.forwardRef(function Card({ children, style, onClick, onMouseOver, onMouseOut, className }, ref) {
   return <div ref={ref} className={className} onClick={onClick} onMouseOver={onMouseOver} onMouseOut={onMouseOut} style={{ background:"#fff", border:"1px solid #E2E5EA", borderRadius:4, boxShadow:"0 1px 3px rgba(0,0,0,0.07)", padding:20, ...style }}>{children}</div>;
@@ -1690,22 +1703,23 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
       {/* Table */}
       <div style={{ overflowX:"auto" }}>
         {(() => {
-          const showAmtCol = field.consultants.some(c => c.payType === "אחוזים");
+          // העמודות זהות בשתי החלופות (סכום קבוע / אחוזים): עמודת "סכום" מוצגת תמיד
+          const showAmtCol = true;
           return (
-        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, tableLayout:"fixed" }}>
           <thead>
             <tr style={{ borderBottom:"2px solid #E2E5EA", background:"#F7F8FA" }}>
               {[
-                { h:"המלצה", w:undefined },
+                { h:"המלצה", w:56 },
                 { h:"★", w:40 },
-                { h:"שם היועץ", w:undefined },
-                { h:"סוג תשלום", w:undefined },
-                { h:"ערך", w:undefined },
-                showAmtCol ? { h:"סכום", w:undefined } : null,
+                { h:"שם היועץ", w:190 },
+                { h:"סוג תשלום", w:120 },
+                { h:"ערך", w:175 },
+                { h:"סכום", w:175 },
                 { h:"הערות בחירה", w:undefined },
                 { h:"הועבר לחברה עירונית", w:80 },
                 { h:"היועץ אושר", w:70 },
-                { h:"", w:undefined },
+                { h:"", w:50 },
               ].filter(Boolean).map(({h,w},hi) => (
                 <th key={hi} style={{ padding:"9px 8px", textAlign:"right", color:"#767676", fontWeight:700, fontSize:11, whiteSpace:"normal", lineHeight:1.3, maxWidth:w, width:w, verticalAlign:"bottom" }}>{h}</th>
               ))}
@@ -1749,21 +1763,22 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
                   </select>
                 </td>
                 {/* ערך */}
-                <td style={{ padding:"10px 8px", minWidth:100 }}>
+                <td style={{ padding:"10px 8px", width:175 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:3, direction:"rtl" }}>
-                    <span style={{ color:"#767676", fontSize:12, fontWeight:600, flexShrink:0 }}>{c.payType==="אחוזים"?"%":""}</span>
+                    <span style={{ color:"#767676", fontSize:12, fontWeight:600, flexShrink:0, width:12, textAlign:"center" }}>{c.payType==="אחוזים"?"%":""}</span>
                     {(c.subItems&&c.subItems.length>0) ? (
-                      <span style={{ fontSize:13, fontWeight:700, color:"#0D0D0D", minWidth:65, textAlign:"right", display:"inline-block" }}>{subTotal(c).toLocaleString("he-IL")}</span>
+                      <span style={{ fontSize:13, fontWeight:700, color:"#0D0D0D", width:130, textAlign:"right", display:"inline-block" }}>{subTotal(c).toLocaleString("he-IL")}</span>
                     ) : (
                       <input
                         type="text" inputMode="decimal"
                         value={c.value ?? ""}
                         onChange={e => updateC(c.id,"value", e.target.value)}
                         placeholder="0"
-                        style={{ background:"transparent", border:"1px solid #E2E5EA", borderRadius:4, padding:"5px 7px", fontSize:13, color:"#0D0D0D", fontFamily:"'Heebo',sans-serif", outline:"none", width:65, textAlign:"right" }}
+                        style={{ background:"transparent", border:"1px solid #E2E5EA", borderRadius:4, padding:"5px 7px", fontSize:13, color:"#0D0D0D", fontFamily:"'Heebo',sans-serif", outline:"none", width:130, textAlign:"right", flexShrink:0 }}
                         onFocus={e => e.target.style.borderColor="#444444"}
                         onBlur={e  => e.target.style.borderColor="#E2E5EA"} />
                     )}
+                    <span style={{ width:24, flexShrink:0, display:"flex", justifyContent:"center" }}>
                     {c.payType!=="אחוזים" && (
                       <button onClick={()=>toggleSubs(c.id)} title="פירוט סעיפים"
                         style={{ background: expandedSubs[c.id]?"#EAF1FA": (c.subItems&&c.subItems.length>0)?"#FAF2E6":"none",
@@ -1773,6 +1788,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
                         {expandedSubs[c.id]?"▼":"▶"}
                       </button>
                     )}
+                    </span>
                   </div>
                 </td>
                 {/* סכום (רק כשיש שורות אחוזים) */}
@@ -4391,7 +4407,8 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
           const boqMeta = (tenderRows||[]).find(r=>r.key==="__meta__");
           const boqVal  = Number(String(boqMeta?.boq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
           const utilBase = finalBoqVal > 0 ? finalBoqVal : boqVal > 0 ? boqVal : contractorEst;
-          const utilPct = consultantsTotal / utilBase * 100;
+          const utilTotal = consultantsUtilTotal(allRows); // ללא מכון בקרה
+          const utilPct = utilTotal / utilBase * 100;
           const bg     = utilPct < 10 ? "#D2EDDD" : utilPct < 12 ? "#F3DFC6" : "#F2C8C8";
           const border = utilPct < 10 ? "#C6E8D4" : utilPct < 12 ? "#F0D4B0" : "#F0B8B8";
           const clr    = utilPct < 10 ? "#1C4532" : utilPct < 12 ? "#5C2020" : "#5C2020";
@@ -4399,7 +4416,7 @@ function BudgetTab({ quotesRows, consultantsRows, setConsultantsRows, budgetStat
             <div style={{ background:bg, border:"2px solid "+border, borderRadius:8, padding:"16px 20px", minWidth:190, display:"flex", flexDirection:"column", gap:8, direction:"rtl" }}>
               <div style={{ fontSize:11, fontWeight:700, color:"#767676", whiteSpace:"nowrap" }}>אחוז יועצים מאומדן קבלני</div>
               <div style={{ fontSize:18, fontWeight:800, color:clr, lineHeight:1 }}>{utilPct.toFixed(2)}%</div>
-              <div style={{ fontSize:12, color:"#767676", marginTop:2 }}>{fmt(consultantsTotal)} / {fmt(utilBase)}</div>
+              <div style={{ fontSize:12, color:"#767676", marginTop:2 }}>{fmt(utilTotal)} / {fmt(utilBase)}</div>
             </div>
           );
         })()}
@@ -6226,7 +6243,7 @@ function CompaniesPage({ companies, setCompanies }) {
         <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
           <div>
             <div style={{ fontSize:11, color:"#767676", fontWeight:700, letterSpacing:3, marginBottom:4 }}>גיליון גלובלי</div>
-            <h1 style={{ fontSize:24, fontWeight:900, color:"#0D0D0D", margin:0 }}>🏛️ חברות עירוניות</h1>
+            <h1 style={{ fontSize:24, fontWeight:900, color:"#0D0D0D", margin:0 }}>חברות עירוניות</h1>
             <div style={{ fontSize:13, color:"#9A9A9A", marginTop:4 }}>ניהול רשימת הלקוחות — חברות עירוניות לפרויקטים</div>
           </div>
           <PrimaryButton onClick={() => setShowAdd(v => !v)}>{showAdd ? "✕ סגור" : "+ הוסף חברה עירונית"}</PrimaryButton>
@@ -6335,7 +6352,7 @@ function ManagersPage({ managers, setManagers }) {
         <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
           <div>
             <div style={{ fontSize:11, color:"#767676", fontWeight:700, letterSpacing:3, marginBottom:4 }}>גיליון גלובלי</div>
-            <h1 style={{ fontSize:24, fontWeight:900, color:"#0D0D0D", margin:0 }}>👔 מנהלים</h1>
+            <h1 style={{ fontSize:24, fontWeight:900, color:"#0D0D0D", margin:0 }}>מנהלים</h1>
             <div style={{ fontSize:13, color:"#9A9A9A", marginTop:4 }}>רשימת מנהלים גלובלית — לשיוך לפרויקטים ולשליחת מיילים אוטומטיים</div>
           </div>
           <PrimaryButton onClick={() => setShowAdd(v => !v)}>{showAdd ? "✕ סגור" : "+ הוסף מנהל"}</PrimaryButton>
@@ -6479,7 +6496,7 @@ function MilestonesPage({ companies, milestones, setMilestones, professions }) {
       <div style={{ flexShrink:0, padding:"34px 38px 0", display:"flex", flexDirection:"column", gap:22 }}>
         <div>
           <div style={{ fontSize:11, color:"#444444", fontWeight:700, letterSpacing:3, marginBottom:4 }}>גיליון גלובלי</div>
-          <h1 style={{ fontSize:24, fontWeight:900, color:"#0D0D0D", margin:0 }}>🚩 תבניות אבני דרך</h1>
+          <h1 style={{ fontSize:24, fontWeight:900, color:"#0D0D0D", margin:0 }}>תבניות אבני דרך</h1>
           <div style={{ fontSize:13, color:"#9A9A9A", marginTop:4 }}>ניהול אבני דרך סטנדרטיות לפי חברה עירונית ומקצוע</div>
         </div>
 
@@ -6938,18 +6955,17 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
   // Cache expensive per-project budget calculations — only for current page
   const projStats = React.useMemo(() => {
     const out = {};
-    pageProjects.forEach(p => {
+    filteredProjects.forEach(p => {
       const d = allData[p.id] || {};
       const o = d.openingData || {};
       const cEst = Number(String(o.contractorEst||"").replace(/,/g,"")) || Number(d.budgetState?.contractorEst||0);
       const _rows = buildBudgetAllRows({ quotesRows:d.quotes||[], consultantsRows:d.consultants||[], budgetState:{...(d.budgetState||{}),contractorEst:cEst}, statsRows, accountsRows:d.accounts||[], planOnlyMap:{}, openingData:o });
-      const consultantsTotal = _rows.reduce((s,r)=>s+(r.payType==="אחוזים"?r.computedFee:r.value)+r.increases, 0);
       const _finalMeta = (d.contractor||[]).find(r=>r.key==="__meta__");
       const _finalBoq  = Number(String(_finalMeta?.finalBoq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
       const _boqMeta   = (d.tender||[]).find(r=>r.key==="__meta__");
       const _boqVal    = Number(String(_boqMeta?.boq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
       const _utilBase  = _finalBoq>0?_finalBoq:_boqVal>0?_boqVal:cEst;
-      const utilPct    = _utilBase>0 ? consultantsTotal/_utilBase*100 : null;
+      const utilPct    = _utilBase>0 ? consultantsUtilTotal(_rows)/_utilBase*100 : null; // ללא מכון בקרה
       const _bs = d.budgetState||{};
       const _feePaid  = [...(_bs.feeRows||[]),...(_bs.extraFeeRows||[])].reduce((s,r)=>s+Number(r.paid||0),0);
       const _conPaid  = [{paid:_bs.contractorPaid||""},...(_bs.extraContractorRows||[])].reduce((s,r)=>s+Number(r.paid||0),0);
@@ -6963,7 +6979,7 @@ function MainInfoPage({ allData, projects, companies, setAllData, setProjects, o
       out[p.id] = { utilPct, budgetUtilPct };
     });
     return out;
-  }, [pageProjects, statsRows]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filteredProjects, statsRows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isFiltered = (fkey) => colFilters[fkey] !== undefined;
   const hasAnyFilter = cols.some(({fkey}) => fkey && isFiltered(fkey));
@@ -7096,7 +7112,7 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#F7F8FA"}">${row.ce
         <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between" }}>
           <div>
             <div style={{ fontSize:11, color:"#767676", fontWeight:700, letterSpacing:3, marginBottom:4 }}>גיליון גלובלי</div>
-            <h1 style={{ fontSize:24, fontWeight:900, color:"#0D0D0D", margin:0 }}>📋 מידע ראשי</h1>
+            <h1 style={{ fontSize:24, fontWeight:900, color:"#0D0D0D", margin:0 }}>מידע ראשי</h1>
             <div style={{ fontSize:13, color:"#9A9A9A", marginTop:4 }}>סקירת כל הפרויקטים · {filteredProjects.length} מתוך {projects.length}</div>
           </div>
           <div style={{ display:"flex", gap:10, alignItems:"center" }}>
@@ -7292,7 +7308,7 @@ function CostsPage({ allData, projects, statsRows, suppliers }) {
       <div style={{ flexShrink:0, padding:"34px 38px 0", display:"flex", flexDirection:"column", gap:22 }}>
         <div>
           <div style={{ fontSize:11, color:"#767676", fontWeight:700, letterSpacing:3, marginBottom:4 }}>גיליון גלובלי</div>
-          <h1 style={{ fontSize:24, fontWeight:900, color:"#0D0D0D", margin:0 }}>📊 השוואת עלויות</h1>
+          <h1 style={{ fontSize:24, fontWeight:900, color:"#0D0D0D", margin:0 }}>השוואת עלויות</h1>
           <div style={{ fontSize:13, color:"#9A9A9A", marginTop:4 }}>השוואת עלויות יועצים בין פרויקטים</div>
         </div>
 
@@ -9042,6 +9058,40 @@ function AppInner({ currentUser, userRole, setUserRole }) {
       XLSX.utils.book_append_sheet(wb, makeSimple(conRows, [18,22,10,16,16,16,16,14,14]), "חשבון קבלן סופי");
     })();
 
+    // 8. דירוג יועצים
+    (() => {
+      const ratingRows = [["תחום","יועץ","שירות/זמינות","מקצועיות","ממוצע בפרויקט","ממוצע כללי"]];
+      (d.quotes||[]).forEach(field => {
+        (field.consultants||[]).filter(c=>c.approved&&c.name?.trim()).forEach(c => {
+          const nm = c.name.trim();
+          const sup = (suppliers||[]).find(s => namesEquivalent(s.name, nm));
+          const entry = (sup?.ratings||[]).find(r => r.projectName === proj.name);
+          const overall = getSupplierAvg(sup?.name || nm, suppliers);
+          ratingRows.push([
+            field.fieldName||"", nm,
+            entry?.service ?? "—",
+            entry?.professionalism ?? "—",
+            entry?.avg != null ? Number(entry.avg) : "—",
+            overall != null ? Number(overall.toFixed(1)) : "—",
+          ]);
+        });
+      });
+      XLSX.utils.book_append_sheet(wb, makeSimple(ratingRows, [16,22,14,12,16,14]), "דירוג יועצים");
+    })();
+
+    // ── ביטוח: כל טאב באפליקציה מקבל גיליון, כך שעמוד חדש לא יישמט מהייצוא ──
+    const TAB_SHEET_NAMES = {
+      opening:"פתיחת פרויקט", quotes:"הצעות מחיר יועצים", consultants:"רשימת יועצים",
+      accounts:"ריכוז חשבונות", budget:"תקציב הפרויקט", tender:"תוצאות מכרז",
+      contractor:"חשבון קבלן סופי", ratings:"דירוג יועצים",
+    };
+    TABS.forEach(t => {
+      const sheetName = (TAB_SHEET_NAMES[t.id] || t.label || t.id).slice(0,31);
+      if (!wb.SheetNames.includes(sheetName)) {
+        XLSX.utils.book_append_sheet(wb, makeSimple([[t.label||t.id],["עמוד זה עדיין ללא ייצוא מפורט"]], [40]), sheetName);
+      }
+    });
+
     const wbout = XLSX.write(wb, { bookType:"xlsx", type:"array" });
     const blob = new Blob([wbout], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     if (returnBlob) return blob;
@@ -9694,28 +9744,26 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                 const _uod2 = allData[selectedProj.id]?.openingData||{};
                 const _ubs2 = {...(allData[selectedProj.id]?.budgetState||{}), contractorEst: String(_uod2.contractorEst||"").replace(/,/g,"")||(allData[selectedProj.id]?.budgetState?.contractorEst||"")};
                 const _uRows2 = buildBudgetAllRows({ quotesRows:getData(selectedProj.id,"quotes"), consultantsRows:getData(selectedProj.id,"consultants"), budgetState:_ubs2, statsRows, accountsRows:getData(selectedProj.id,"accounts")||[], planOnlyMap:{}, openingData:_uod2 });
-                const _uTotal2 = _uRows2.reduce((s,r)=>s+(r.payType==="אחוזים"?r.computedFee:r.value)+r.increases, 0);
                 const _uTm2 = (getData(selectedProj.id,"tender")||[]).find(r=>r.key==="__meta__");
                 const _uBoq2 = Number(String(_uTm2?.boq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
                 const _uCm2 = (getData(selectedProj.id,"contractor")||[]).find(r=>r.key==="__meta__");
                 const _uFBq2 = Number(String(_uCm2?.finalBoq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
                 const _uCEst2 = Number(String(_uod2.contractorEst||_ubs2.contractorEst||"").replace(/,/g,"").replace(/[^\d.]/g,""));
                 const _uBase2 = _uFBq2>0?_uFBq2:_uBoq2>0?_uBoq2:_uCEst2;
-                const _utilPct2 = _uBase2>0 ? _uTotal2/_uBase2*100 : 0;
-                return <QuotesTab rows={getData(selectedProj.id,"quotes")} setRows={makeTabSetter(selectedProj.id,"quotes")} highlightFieldId={highlightFieldId} suppliers={suppliers} budgetState={allData[selectedProj.id]?.budgetState||{}} openingData={allData[selectedProj.id]?.openingData||{}} statsRows={statsRows} projectName={selectedProj.name||""} projectNumber={allData[selectedProj.id]?.projectNumber||""} companyName={companies.find(c=>String(c.id)===String(allData[selectedProj.id]?.companyId))?.name||""} companyId={String(allData[selectedProj.id]?.companyId||"")} workScopes={workScopes} projectMeta={{ id:selectedProj.id, name:selectedProj.name, status:selectedProj.status, domainManager:allData[selectedProj.id]?.domainManager||"", domainManagerEmail:allData[selectedProj.id]?.domainManagerEmail||"", tendersManager:allData[selectedProj.id]?.tendersManager||"", tendersManagerEmail:allData[selectedProj.id]?.tendersManagerEmail||"" }} consultantUtilPct={_utilPct2} managers={managers} />;
+                const _utilPct2 = _uBase2>0 ? consultantsUtilTotal(_uRows2)/_uBase2*100 : 0; // ללא מכון בקרה
+                return <QuotesTab rows={getData(selectedProj.id,"quotes")} setRows={makeTabSetter(selectedProj.id,"quotes")} highlightFieldId={highlightFieldId} suppliers={suppliers} budgetState={allData[selectedProj.id]?.budgetState||{}} openingData={allData[selectedProj.id]?.openingData||{}} statsRows={statsRows} projectName={selectedProj.name||""} projectNumber={allData[selectedProj.id]?.projectNumber||""} companyName={companies.find(c=>String(c.id)===String(allData[selectedProj.id]?.companyId))?.name||""} companyId={String(allData[selectedProj.id]?.companyId||"")} workScopes={workScopes} projectMeta={{ id:selectedProj.id, name:selectedProj.name, status:selectedProj.status, planningManager:allData[selectedProj.id]?.planningManager||"", planningManagerEmail:allData[selectedProj.id]?.planningManagerEmail||"", executionManager:allData[selectedProj.id]?.executionManager||"", executionManagerEmail:allData[selectedProj.id]?.executionManagerEmail||"", domainManager:allData[selectedProj.id]?.domainManager||"", domainManagerEmail:allData[selectedProj.id]?.domainManagerEmail||"", tendersManager:allData[selectedProj.id]?.tendersManager||"", tendersManagerEmail:allData[selectedProj.id]?.tendersManagerEmail||"" }} consultantUtilPct={_utilPct2} managers={managers} />;
               })()}
               {activeTab === "consultants" && (() => {
                 const _uod3 = allData[selectedProj.id]?.openingData||{};
                 const _ubs3 = {...(allData[selectedProj.id]?.budgetState||{}), contractorEst: String(_uod3.contractorEst||"").replace(/,/g,"")||(allData[selectedProj.id]?.budgetState?.contractorEst||"")};
                 const _uRows3 = buildBudgetAllRows({ quotesRows:getData(selectedProj.id,"quotes"), consultantsRows:getData(selectedProj.id,"consultants"), budgetState:_ubs3, statsRows, accountsRows:getData(selectedProj.id,"accounts")||[], planOnlyMap:{}, openingData:_uod3 });
-                const _uTotal3 = _uRows3.reduce((s,r)=>s+(r.payType==="אחוזים"?r.computedFee:r.value)+r.increases, 0);
                 const _uTm3 = (getData(selectedProj.id,"tender")||[]).find(r=>r.key==="__meta__");
                 const _uBoq3 = Number(String(_uTm3?.boq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
                 const _uCm3 = (getData(selectedProj.id,"contractor")||[]).find(r=>r.key==="__meta__");
                 const _uFBq3 = Number(String(_uCm3?.finalBoq||"").replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
                 const _uCEst3 = Number(String(_uod3.contractorEst||_ubs3.contractorEst||"").replace(/,/g,"").replace(/[^\d.]/g,""));
                 const _uBase3 = _uFBq3>0?_uFBq3:_uBoq3>0?_uBoq3:_uCEst3;
-                const _utilPct3 = _uBase3>0 ? _uTotal3/_uBase3*100 : 0;
+                const _utilPct3 = _uBase3>0 ? consultantsUtilTotal(_uRows3)/_uBase3*100 : 0; // ללא מכון בקרה
                 return <ConsultantsTab rows={getData(selectedProj.id,"consultants")} setRows={makeTabSetter(selectedProj.id,"consultants")} quotesRows={getData(selectedProj.id,"quotes")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} openConsultantId={openConsultantId} scrollToIncreaseId={scrollToIncreaseId} suppliers={suppliers} projectName={selectedProj.name} openingData={allData[selectedProj.id]?.openingData||{}} setOpeningData={od => setAllData(prev => ({...prev, [selectedProj.id]: {...(prev[selectedProj.id]||makeProjectData()), openingData: od}}))} projectMeta={{ id:selectedProj.id, name:selectedProj.name, status:selectedProj.status, unitManager:allData[selectedProj.id]?.unitManager||"", unitManagerEmail:allData[selectedProj.id]?.unitManagerEmail||"" }} milestones={milestones} localMilestones={allData[selectedProj.id]?.localMilestones||{}} companyId={String(allData[selectedProj.id]?.companyId||"")} consultantUtilPct={_utilPct3} managers={managers} pendingBimAmount={pendingBimAmount} onClearPendingBim={() => setPendingBimAmount(0)} />;
               })()}
               {activeTab === "accounts"    && <AccountsTab    rows={getData(selectedProj.id,"accounts")}    setRows={makeTabSetter(selectedProj.id,"accounts")} quotesRows={getData(selectedProj.id,"quotes")} consultantsRows={getData(selectedProj.id,"consultants")} setConsultantsRows={makeTabSetter(selectedProj.id,"consultants")} budgetState={allData[selectedProj.id]?.budgetState||{}} statsRows={statsRows} companyId={allData[selectedProj.id]?.companyId||""} companyName={companies.find(c=>String(c.id)===String(allData[selectedProj.id]?.companyId))?.name||""} milestones={milestones} openInvoiceId={openInvoiceId} openingData={allData[selectedProj.id]?.openingData||{}} localMilestones={allData[selectedProj.id]?.localMilestones||{}} setLocalMilestones={val=>setAllData(prev=>({...prev,[selectedProj.id]:{...(prev[selectedProj.id]||makeProjectData()),localMilestones:val}}))} managers={managers}
