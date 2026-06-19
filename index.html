@@ -402,11 +402,11 @@
                       ))}
                       {_autoProjs.map(p => (
                         <span key={"auto-"+p.id} title="הורשה אוטומטית — מוגדר כמנהל הפרויקט בפתיחת הפרויקט"
-                          style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"5px 12px", borderRadius:4, fontSize:12, fontWeight:600, fontFamily:"'Heebo',sans-serif", background:"#D2EDDD", color:"#1C4532" }}>
+                          style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"5px 12px", borderRadius:4, fontSize:12, fontWeight:600, fontFamily:"'Heebo',sans-serif", background:"#EAF1FA", color:"#163356" }}>
                           {p.name}
-                          <span style={{ fontSize:10, fontWeight:700, opacity:0.85 }}>אוטומטי · מנהל</span>
+                          <span style={{ fontSize:10, fontWeight:700, opacity:0.85 }}>אוטומטי</span>
                           <button onClick={() => setExcluded(u.uid, p.id, true)} title="הסתר פרויקט זה מהיוזר"
-                            style={{ border:"none", background:"none", cursor:"pointer", color:"#1C4532", fontSize:13, fontWeight:700, padding:0, lineHeight:1 }}>
+                            style={{ border:"none", background:"none", cursor:"pointer", color:"#163356", fontSize:13, fontWeight:700, padding:0, lineHeight:1 }}>
                             ×
                           </button>
                         </span>
