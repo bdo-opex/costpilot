@@ -796,8 +796,11 @@ const css = `
   .hov-side:hover{background:#F7F8FA!important;}
   .hov-tab:hover{background:#F7F8FA!important;}
   .fade{animation:fade .2s ease;}
+  /* צפייה-בלבד: מנטרל שדות עריכה (קלט) כרמז ויזואלי; כפתורי ניווט/צפייה נשארים פעילים.
+     החסימה האמיתית של שינויים נאכפת בשכבת הכתיבה (makeTabSetter / persistence / openOutlookEmail). */
   .view-only input,.view-only textarea,.view-only select{pointer-events:none!important;cursor:default!important;}
-  .view-only button:not(.allow-readonly){pointer-events:none!important;opacity:.45!important;cursor:default!important;}
+  /* לאפשר תיבות חיפוש/סינון (פעולה מקומית בלבד שאינה משנה נתונים) */
+  .view-only input[placeholder*="חיפוש"]{pointer-events:auto!important;cursor:text!important;}
   @keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
   @keyframes pulse-border{0%,100%{box-shadow:0 0 0 3px #B8CEED;}50%{box-shadow:0 0 0 7px #B8CEED66;}} @keyframes pulse-row{0%,100%{background:#EAF1FA;}50%{background:#B8CEED;}}
   @keyframes reminder-blink{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.4;transform:scale(0.97);}}
@@ -1139,6 +1142,7 @@ function NameSearchInput({ value, suppliers, isBold, onSelect, autoFocus }) {
 
 // ── Helper: פתיחת Outlook עם גוף RTL בקליפבורד ──────────────────────────────
 const openOutlookEmail = (toEmail, subject, bodyText, bodyHtmlOverride) => {
+  if (typeof window !== "undefined" && window.__costpilotReadOnly) return; // צפייה-בלבד: יוזר רגיל אינו שולח מיילים
   const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   const html = bodyHtmlOverride || `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:13px;direction:rtl;text-align:right">${
     bodyText.split("\n").map(l => l.trim() ? `<p style="margin:2px 0">${esc(l)}</p>` : `<p style="margin:5px 0"> </p>`).join("")
@@ -1674,6 +1678,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
   };
 
   const downloadScopeEml = () => {
+    if (typeof window !== "undefined" && window.__costpilotReadOnly) return; // צפייה-בלבד: יוזר רגיל אינו שולח הזמנות להצעת מחיר
     const { bccEmails, subject, body } = buildFieldMailData();
     const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     const html = `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:13px;direction:rtl;text-align:right">${
@@ -1728,7 +1733,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
             style={{ background:"#F0F2F5", color:"#3A3A3A", border:"1.5px solid #E2E5EA", borderRadius:4, padding:"8px 12px", fontSize:13, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, whiteSpace:"nowrap" }}>
             + הוסף יועץ
           </button>
-          <button onClick={() => { setEmailCopied(false); setShowEmailModal(true); }}
+          <button onClick={() => { if (typeof window !== "undefined" && window.__costpilotReadOnly) return; setEmailCopied(false); setShowEmailModal(true); }}
             title="שלח הזמנה להגשת הצ״מ לכל היועצים בתחום זה"
             style={{ background:"#EAF1FA", color:"#163356", border:"1.5px solid #B8CEED", borderRadius:4, padding:"8px 12px", fontSize:13, cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:700, whiteSpace:"nowrap" }}>
             📧 שלח הזמנה
@@ -1981,7 +1986,7 @@ function FieldGroup({ field, onDelete, onUpdateConsultants, onRename, suppliers,
 // ── Tab: רשימת יועצים ─────────────────────────────────────────────────────────
 function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, scrollToIncreaseId, suppliers, openingData, setOpeningData, projectMeta, milestones, localMilestones, companyId, consultantUtilPct, managers, pendingBimAmount, onClearPendingBim }) {
   const [inc, setInc] = useState({ reason:"", amount:"", date:"", planOnly:false });
-  const [increases, setIncreases] = useState(consultant?.increases || []);
+  const [increases, _setIncreases] = useState(consultant?.increases || []);
   const [approvalModal, setApprovalModal] = useState(null);
   const [showEstForm, setShowEstForm] = useState(false);
   const [newEstAmount, setNewEstAmount] = useState("");
@@ -1994,11 +1999,18 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
     if (sm && sm.contacts?.length > 0) return sm.contacts.map(c => ({ ...c, name: c.contact||c.name||"", isFromSupplier:true }));
     return [{ id:Date.now(), name:"", phone:"", phone2:"", email:"", isFromSupplier:false }];
   };
-  const [contacts, setContacts] = useState(initContacts);
-  const [exportNotes, setExportNotes] = useState(consultant?.exportNotes || "");
+  const [contacts, _setContacts] = useState(initContacts);
+  const [exportNotes, _setExportNotes] = useState(consultant?.exportNotes || "");
   const supplierMatch = (suppliers||[]).find(s => s.name === consultant?.name);
 
-  React.useEffect(() => { setIncreases(consultant?.increases || []); }, [consultant?.id]);
+  // צפייה-בלבד: כל שינוי מקומי במודל היועץ (הגדלות/BIM/אישורים/אנשי קשר/הערות) חסום ליוזר רגיל.
+  // סנכרון התצוגה משתמש ב-setter הגולמי כדי שהנתונים עדיין יוצגו לצפייה.
+  const _roCM = () => typeof window !== "undefined" && window.__costpilotReadOnly;
+  const setIncreases   = v => { if (_roCM()) return; _setIncreases(v); };
+  const setContacts    = v => { if (_roCM()) return; _setContacts(v); };
+  const setExportNotes = v => { if (_roCM()) return; _setExportNotes(v); };
+
+  React.useEffect(() => { _setIncreases(consultant?.increases || []); }, [consultant?.id]);
 
   // Apply pending BIM increase from TenderTab "הוסף" button on first mount
   React.useEffect(() => {
@@ -2016,6 +2028,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
   if (!consultant) return null;
 
   const saveContacts = (newContacts, patch={}) => {
+    if (typeof window !== "undefined" && window.__costpilotReadOnly) return; // צפייה-בלבד
     setContacts(newContacts);
     onSave({ ...consultant, increases, contacts: newContacts, exportNotes, ...patch });
   };
@@ -2024,6 +2037,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
   const updContact = (id, key, val) => saveContacts(contacts.map(c => c.id===id ? {...c,[key]:val} : c));
 
   const saveIncreases = (newInc) => {
+    if (typeof window !== "undefined" && window.__costpilotReadOnly) return; // צפייה-בלבד: אין אישור/הגדלה/מחיקה
     setIncreases(newInc);
     onSave({ ...consultant, increases: newInc, contacts, exportNotes });
   };
@@ -2146,6 +2160,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
   };
 
   const saveNewEst = () => {
+    if (typeof window !== "undefined" && window.__costpilotReadOnly) return; // צפייה-בלבד
     const newEst = Number(String(newEstAmount).replace(/[,\s]/g,"").replace(/[^\d.]/g,""));
 
     // ─── isOtherPct: שמור אומדן פרק ישיר ב-sectionEstHistory ───
@@ -2230,6 +2245,7 @@ function ConsultantModal({ consultant, onClose, onSave, budgetState, statsRows, 
   };
   const delIncrease    = id  => saveIncreases(increases.filter(x => x.id !== id));
   const updateIncrease = (id, key, val) => {
+    if (typeof window !== "undefined" && window.__costpilotReadOnly) return; // צפייה-בלבד: אין אישור/העברה-לאישור של הגדלות
     const ts = {};
     if (key === "sentToManager" && val) ts.sentToManagerAt = Date.now();
     if (key === "sentToMunicipality" && val) ts.sentToMunicipalityAt = Date.now();
@@ -3281,6 +3297,7 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
   };
 
   const sendForApproval = (invNum, stage) => {
+    if (typeof window !== "undefined" && window.__costpilotReadOnly) return; // צפייה-בלבד: אין שליחה לאישור / פתיחת מייל
     if (!projectMeta || !sel) return;
     const validKeys = new Set([
       ...fieldMilestones.map(m => "m-"+m.id),
@@ -7162,7 +7179,7 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#F7F8FA"}">${row.ce
             <div style={{ fontSize:13, color:"#9A9A9A", marginTop:4 }}>סקירת כל הפרויקטים · {filteredProjects.length} מתוך {projects.length}</div>
           </div>
           <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-            <button onClick={exportToExcel}
+            <button onClick={exportToExcel} className="allow-readonly"
               style={{ fontSize:13, padding:"8px 14px", borderRadius:4, border:"1px solid #C6E8D4", background:"#EFF7F3", color:"#1C4532", cursor:"pointer", fontFamily:"'Heebo',sans-serif", fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
               📥 ייצוא לאקסל
             </button>
@@ -8067,6 +8084,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
         <button
           onClick={e => {
             e.stopPropagation();
+            if (typeof window !== "undefined" && window.__costpilotReadOnly) return; // צפייה-בלבד
             const { body, htmlBody, toEmail } = buildEmail();
             openOutlookEmail(toEmail, subjectMap[item.stage] || "CostPilot — תזכורת", body, htmlBody);
             if (onMarkEmailSent) onMarkEmailSent(item);
@@ -8419,8 +8437,11 @@ function OpeningTab({ data, setData, budgetState, setBudgetState, statsRows, pro
 function AppInner({ currentUser, userRole, setUserRole }) {
   const uid = currentUser.uid;
   const isAdmin = (userRole?.role === "admin") || false;
+  // צפייה-בלבד: דגל גלובלי שחוסם שליחת מיילים (openOutlookEmail) ליוזר שאינו admin
+  useEffect(() => { window.__costpilotReadOnly = !isAdmin; }, [isAdmin]);
 
-  const [projects, setProjects] = useState([]);
+  const [projects, _setProjects] = useState([]);
+  const setProjects = v => { if (!isAdmin) return; _setProjects(v); }; // צפייה-בלבד (הסנכרון משתמש ב-_setProjects)
 
   // Load SheetJS
   useEffect(() => {
@@ -8430,7 +8451,8 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     document.head.appendChild(script);
   }, []);
 
-  const [allData, setAllData] = useState({});
+  const [allData, _setAllData] = useState({});
+  const setAllData = v => { if (!isAdmin) return; _setAllData(v); }; // צפייה-בלבד: כל מוטציה לנתוני פרויקט חסומה ליוזר רגיל (הסנכרון משתמש ב-_setAllData)
   const [dataLoaded, setDataLoaded] = useState(false);
 
   // סינון פרויקטים לפי הרשאה - אחרי שה-state מוגדר.
@@ -8478,12 +8500,12 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     let projDataLoaded = false;
     const OTHER_KEYS = ["suppliers","companies","milestones","statsRows","workScopes","managers"];
     const setters = {
-      suppliers:  d => setSuppliers(migrateSuppliers(d)),
-      companies:  d => setCompanies(d),
-      milestones: d => setMilestones(d),
-      statsRows:  d => setStatsRows(d),
-      workScopes: d => setWorkScopes(d),
-      managers:   d => setManagers(d),
+      suppliers:  d => _setSuppliers(migrateSuppliers(d)),
+      companies:  d => _setCompanies(d),
+      milestones: d => _setMilestones(d),
+      statsRows:  d => _setStatsRows(d),
+      workScopes: d => _setWorkScopes(d),
+      managers:   d => _setManagers(d),
     };
     const checkDone = () => {
       if (nonProjLoaded >= OTHER_KEYS.length && projDataLoaded) setDataLoaded(true);
@@ -8500,7 +8522,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     const projUnsub = subscribeShared("projects", async data => {
       if (data === null) data = [];
       fsReceived.current["projects"] = true;
-      setProjects(data);
+      _setProjects(data);
       setTimeout(() => { fsReceived.current["projects"] = false; }, 200);
 
       // טיפול בפרויקטים חדשים — גם בטעינה ראשונה וגם בעדכונים עתידיים
@@ -8533,7 +8555,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
           synced[id] = s;
           if (s !== combined[id]) toResave.push(id);
         });
-        setAllData(synced);
+        _setAllData(synced);
         toResave.forEach(id => saveProjectData(id, synced[id]));
         checkDone();
       } else if (newProjects.length > 0) {
@@ -8543,7 +8565,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
           const d = await loadProjectData(p.id);
           additions[String(p.id)] = syncProjectData(d || makeProjectData());
         }));
-        setAllData(prev => ({ ...prev, ...additions }));
+        _setAllData(prev => ({ ...prev, ...additions }));
       }
 
       // הירשם לעדכונים real-time לפרויקטים חדשים
@@ -8551,7 +8573,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
         projSubsRef.current[p.id] = subscribeProjectData(p.id, newD => {
           if (newD !== null) {
             fsReceived.current["allData"] = true;
-            setAllData(prev => ({ ...prev, [p.id]: syncProjectData(newD) }));
+            _setAllData(prev => ({ ...prev, [p.id]: syncProjectData(newD) }));
             setTimeout(() => { fsReceived.current["allData"] = false; }, 200);
           }
         });
@@ -8598,26 +8620,31 @@ function AppInner({ currentUser, userRole, setUserRole }) {
 
 
   // ── Suppliers (global) ──────────────────────────────────────────────────────
-  const [suppliers, setSuppliers] = useState([]);
-  useEffect(() => { if (dataLoaded && !fsReceived.current["suppliers"]) saveToFirestore(uid, "suppliers", suppliers); }, [suppliers, dataLoaded]);
+  const [suppliers, _setSuppliers] = useState([]);
+  const setSuppliers = v => { if (!isAdmin) return; _setSuppliers(v); }; // צפייה-בלבד: רק admin משנה נתונים גלובליים
+  useEffect(() => { if (isAdmin && dataLoaded && !fsReceived.current["suppliers"]) saveToFirestore(uid, "suppliers", suppliers); }, [suppliers, dataLoaded]);
 
   // ── Municipal companies (global) ────────────────────────────────────────────
-  const [companies, setCompanies] = useState([]);
-  useEffect(() => { if (dataLoaded && !fsReceived.current["companies"]) saveToFirestore(uid, "companies", companies); }, [companies, dataLoaded]);
+  const [companies, _setCompanies] = useState([]);
+  const setCompanies = v => { if (!isAdmin) return; _setCompanies(v); }; // צפייה-בלבד
+  useEffect(() => { if (isAdmin && dataLoaded && !fsReceived.current["companies"]) saveToFirestore(uid, "companies", companies); }, [companies, dataLoaded]);
 
   // ── Milestones per company per profession (global) ──────────────────────────
   // structure: { [companyId]: { [profession]: [ {id,name,pct,planOnly} ] } }
-  const [milestones, setMilestones] = useState({});
-  useEffect(() => { if (dataLoaded && !fsReceived.current["milestones"]) saveToFirestore(uid, "milestones", milestones); }, [milestones, dataLoaded]);
+  const [milestones, _setMilestones] = useState({});
+  const setMilestones = v => { if (!isAdmin) return; _setMilestones(v); }; // צפייה-בלבד
+  useEffect(() => { if (isAdmin && dataLoaded && !fsReceived.current["milestones"]) saveToFirestore(uid, "milestones", milestones); }, [milestones, dataLoaded]);
 
   // ── Work scopes per field (global) ──────────────────────────────────────────
-  const [workScopes, setWorkScopes] = useState({});
-  useEffect(() => { if (dataLoaded && !fsReceived.current["workScopes"]) saveToFirestore(uid, "workScopes", workScopes); }, [workScopes, dataLoaded]);
+  const [workScopes, _setWorkScopes] = useState({});
+  const setWorkScopes = v => { if (!isAdmin) return; _setWorkScopes(v); }; // צפייה-בלבד
+  useEffect(() => { if (isAdmin && dataLoaded && !fsReceived.current["workScopes"]) saveToFirestore(uid, "workScopes", workScopes); }, [workScopes, dataLoaded]);
 
   // ── Managers (global) ────────────────────────────────────────────────────────
   // { id, name, role: "unit"|"planning"|"execution"|"domain", email, phone }
-  const [managers, setManagers] = useState([]);
-  useEffect(() => { if (dataLoaded && !fsReceived.current["managers"]) saveToFirestore(uid, "managers", managers); }, [managers, dataLoaded]);
+  const [managers, _setManagers] = useState([]);
+  const setManagers = v => { if (!isAdmin) return; _setManagers(v); }; // צפייה-בלבד
+  useEffect(() => { if (isAdmin && dataLoaded && !fsReceived.current["managers"]) saveToFirestore(uid, "managers", managers); }, [managers, dataLoaded]);
 
   // ── Statistics (global, persisted separately) ───────────────────────────
   const DEFAULT_STATS = [
@@ -8630,8 +8657,9 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     { id:7,  field:"אינסטלציה" },
     { id:8,  field:"פיתוח" },
   ];
-  const [statsRows, setStatsRows] = useState(DEFAULT_STATS.map(s => ({ ...s, pct:"" })));
-  useEffect(() => { if (dataLoaded && !fsReceived.current["statsRows"]) saveToFirestore(uid, "statsRows", statsRows); }, [statsRows, dataLoaded]);
+  const [statsRows, _setStatsRows] = useState(DEFAULT_STATS.map(s => ({ ...s, pct:"" })));
+  const setStatsRows = v => { if (!isAdmin) return; _setStatsRows(v); }; // צפייה-בלבד
+  useEffect(() => { if (isAdmin && dataLoaded && !fsReceived.current["statsRows"]) saveToFirestore(uid, "statsRows", statsRows); }, [statsRows, dataLoaded]);
 
   // After initial load: match imported manager TEXT names → IDs so OpeningTab dropdowns work
   useEffect(() => {
@@ -8655,7 +8683,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
       tryMatch("executionManager", "executionManagerId", "executionManagerEmail");
       if (upd) updates[projId] = upd;
     });
-    if (Object.keys(updates).length > 0) {
+    if (isAdmin && Object.keys(updates).length > 0) {
       setAllData(prev => {
         const next = { ...prev, ...updates };
         Object.keys(updates).forEach(id => saveProjectData(id, next[id]));
@@ -8692,10 +8720,10 @@ function AppInner({ currentUser, userRole, setUserRole }) {
   }, []);
 
   // Auto-save to Firestore - must be before any early return
-  useEffect(() => { if (dataLoaded && !fsReceived.current["projects"]) saveToFirestore(uid, "projects", projects); }, [projects, dataLoaded]);
+  useEffect(() => { if (isAdmin && dataLoaded && !fsReceived.current["projects"]) saveToFirestore(uid, "projects", projects); }, [projects, dataLoaded]);
   const prevAllDataRef = React.useRef(null);
   useEffect(() => {
-    if (!dataLoaded || fsReceived.current["allData"]) return;
+    if (!isAdmin || !dataLoaded || fsReceived.current["allData"]) return;
     const prev = prevAllDataRef.current;
     prevAllDataRef.current = allData;
     if (prev === null) return;
@@ -8712,6 +8740,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
 
   // ── project CRUD ─────────────────────────────────────────────────────────
   const addProject = () => {
+    if (!isAdmin) return; // צפייה-בלבד
     if (!newPForm.name.trim()) return;
     const p = { ...newPForm, id: Date.now(), status:"", createdAt: Date.now() };
     const newProjData = { ...makeProjectData(), companyId: newPForm.companyId||"" };
@@ -8729,7 +8758,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
     projSubsRef.current[p.id] = subscribeProjectData(p.id, newD => {
       if (newD !== null) {
         fsReceived.current["allData"] = true;
-        setAllData(prev => ({ ...prev, [p.id]: syncProjectData(newD) }));
+        _setAllData(prev => ({ ...prev, [p.id]: syncProjectData(newD) }));
         setTimeout(() => { fsReceived.current["allData"] = false; }, 200);
       }
     });
@@ -8739,6 +8768,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
   };
 
   const deleteProject = id => {
+    if (!isAdmin) return; // צפייה-בלבד
     setProjects(prev => { const u = prev.filter(p => p.id !== id); saveProjects(u); return u; });
     setAllData(prev => { const u = {...prev}; delete u[id]; saveAllData(u); return u; });
     if (projSubsRef.current[id]) { projSubsRef.current[id](); delete projSubsRef.current[id]; }
@@ -9293,6 +9323,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
   // ── tab data updater ─────────────────────────────────────────────────────
   // Each tab receives its own rows array and a setter for that array only.
   const makeTabSetter = (projId, tabKey) => newRowsOrFn => {
+    if (!isAdmin) return; // צפייה-בלבד: יוזר רגיל אינו משנה נתוני פרויקט (אישורים/הגדלות/עריכות/מחיקות)
     setAllData(prev => {
       const projData = prev[projId] || makeProjectData();
       const currentRows = projData[tabKey] || [];
