@@ -1303,7 +1303,7 @@ function ApprovalEmailModal({ toEmail, toName, subject, body, htmlBody, onSent, 
   );
 }
 
-function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, openingData, statsRows, projectName, projectNumber, companyName, companyId, workScopes, projectMeta, consultantUtilPct, managers }) {
+function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, openingData, statsRows, projectName, projectNumber, companyName, companyId, workScopes, projectMeta, consultantUtilPct, managers, isAdmin }) {
   const [newFieldName, setNewFieldName] = useState("");
   const [showNewField, setShowNewField] = useState(false);
   const [search, setSearch] = useState("");
@@ -1420,7 +1420,7 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
       <div style={{ flexShrink:0, padding:"26px 30px 0", display:"flex", flexDirection:"column", gap:16 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <h2 style={{ fontSize:18, fontWeight:800, color:"#0D0D0D" }}>הצעות מחיר יועצים</h2>
-        <PrimaryButton onClick={() => setShowNewField(true)}>+ הוסף תחום חדש</PrimaryButton>
+        {isAdmin && <PrimaryButton onClick={() => setShowNewField(true)}>+ הוסף תחום חדש</PrimaryButton>}
       </div>
 
       {rows.length > 0 && (
@@ -9850,7 +9850,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
                 const _uCEst2 = Number(String(_uod2.contractorEst||_ubs2.contractorEst||"").replace(/,/g,"").replace(/[^\d.]/g,""));
                 const _uBase2 = _uFBq2>0?_uFBq2:_uBoq2>0?_uBoq2:_uCEst2;
                 const _utilPct2 = _uBase2>0 ? consultantsUtilTotal(_uRows2)/_uBase2*100 : 0; // ללא מכון בקרה
-                return <QuotesTab rows={getData(selectedProj.id,"quotes")} setRows={makeTabSetter(selectedProj.id,"quotes")} highlightFieldId={highlightFieldId} suppliers={suppliers} budgetState={allData[selectedProj.id]?.budgetState||{}} openingData={allData[selectedProj.id]?.openingData||{}} statsRows={statsRows} projectName={selectedProj.name||""} projectNumber={allData[selectedProj.id]?.projectNumber||""} companyName={companies.find(c=>String(c.id)===String(allData[selectedProj.id]?.companyId))?.name||""} companyId={String(allData[selectedProj.id]?.companyId||"")} workScopes={workScopes} projectMeta={{ id:selectedProj.id, name:selectedProj.name, status:selectedProj.status, planningManager:allData[selectedProj.id]?.planningManager||"", planningManagerEmail:allData[selectedProj.id]?.planningManagerEmail||"", executionManager:allData[selectedProj.id]?.executionManager||"", executionManagerEmail:allData[selectedProj.id]?.executionManagerEmail||"", domainManager:allData[selectedProj.id]?.domainManager||"", domainManagerEmail:allData[selectedProj.id]?.domainManagerEmail||"", tendersManager:allData[selectedProj.id]?.tendersManager||"", tendersManagerEmail:allData[selectedProj.id]?.tendersManagerEmail||"" }} consultantUtilPct={_utilPct2} managers={managers} />;
+                return <QuotesTab rows={getData(selectedProj.id,"quotes")} setRows={makeTabSetter(selectedProj.id,"quotes")} highlightFieldId={highlightFieldId} suppliers={suppliers} budgetState={allData[selectedProj.id]?.budgetState||{}} openingData={allData[selectedProj.id]?.openingData||{}} statsRows={statsRows} projectName={selectedProj.name||""} projectNumber={allData[selectedProj.id]?.projectNumber||""} companyName={companies.find(c=>String(c.id)===String(allData[selectedProj.id]?.companyId))?.name||""} companyId={String(allData[selectedProj.id]?.companyId||"")} workScopes={workScopes} projectMeta={{ id:selectedProj.id, name:selectedProj.name, status:selectedProj.status, planningManager:allData[selectedProj.id]?.planningManager||"", planningManagerEmail:allData[selectedProj.id]?.planningManagerEmail||"", executionManager:allData[selectedProj.id]?.executionManager||"", executionManagerEmail:allData[selectedProj.id]?.executionManagerEmail||"", domainManager:allData[selectedProj.id]?.domainManager||"", domainManagerEmail:allData[selectedProj.id]?.domainManagerEmail||"", tendersManager:allData[selectedProj.id]?.tendersManager||"", tendersManagerEmail:allData[selectedProj.id]?.tendersManagerEmail||"" }} consultantUtilPct={_utilPct2} managers={managers} isAdmin={isAdmin} />;
               })()}
               {activeTab === "consultants" && (() => {
                 const _uod3 = allData[selectedProj.id]?.openingData||{};
