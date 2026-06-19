@@ -8238,20 +8238,21 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
   );
 }
 
-function ProjectNumber({ value, onChange }) {
+function ProjectNumber({ value, onChange, readOnly }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value);
   React.useEffect(() => { setVal(value); }, [value]);
   const save = () => { onChange(val); setEditing(false); };
-  if (editing) return (
+  if (!readOnly && editing) return (
     <input autoFocus value={val} onChange={e=>setVal(e.target.value)}
       onBlur={save} onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")setEditing(false);}}
       placeholder="מס׳ פרויקט"
       style={{ fontSize:12, color:"#444444", background:"#F7F8FA", border:"1.5px solid #163356", borderRadius:4, padding:"4px 8px", fontFamily:"'Heebo',sans-serif", outline:"none", width:120, textAlign:"right" }} />
   );
   return (
-    <span onClick={()=>{setVal(value);setEditing(true);}}
-      style={{ fontSize:12, color: value?"#444444":"#9A9A9A", cursor:"pointer", padding:"4px 8px", border:"1.5px solid #E2E5EA", borderRadius:4, background:"#F7F8FA", fontFamily:"'Heebo',sans-serif", display:"inline-block", lineHeight:1.4, whiteSpace:"nowrap" }}>
+    <span onClick={readOnly ? undefined : ()=>{setVal(value);setEditing(true);}}
+      style={{ fontSize:12, color: value?"#444444":"#9A9A9A", cursor: readOnly?"default":"pointer", padding:"4px 8px", border:"1.5px solid #E2E5EA", borderRadius:4, background:"#F7F8FA", fontFamily:"'Heebo',sans-serif", display:"inline-block", lineHeight:1.4, whiteSpace:"nowrap" }}
+      title={readOnly ? undefined : "לחץ לעריכת מספר"}>
       {value || "מס׳ פרויקט"}
     </span>
   );
