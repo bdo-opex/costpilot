@@ -6390,7 +6390,7 @@ const MANAGER_ROLES = [
   { value:"tenders",     label:"מנהל מכרזים" },
   { value:"accounting",  label:"מנהל/ת חשבונות" },
 ];
-function ManagersPage({ managers, setManagers }) {
+function ManagersPage({ managers, setManagers, isAdmin }) {
   const [form, setForm] = useState({ name:"", role:"planning", email:"", phone:"" });
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({});
@@ -6418,7 +6418,7 @@ function ManagersPage({ managers, setManagers }) {
             <h1 style={{ fontSize:24, fontWeight:900, color:"#0D0D0D", margin:0 }}>מנהלים</h1>
             <div style={{ fontSize:13, color:"#9A9A9A", marginTop:4 }}>רשימת מנהלים גלובלית — לשיוך לפרויקטים ולשליחת מיילים אוטומטיים</div>
           </div>
-          <PrimaryButton onClick={() => setShowAdd(v => !v)}>{showAdd ? "✕ סגור" : "+ הוסף מנהל"}</PrimaryButton>
+          {isAdmin && <PrimaryButton onClick={() => setShowAdd(v => !v)}>{showAdd ? "✕ סגור" : "+ הוסף מנהל"}</PrimaryButton>}
         </div>
       </div>
       <div style={{ flex:1, overflowY:"auto", minHeight:0, padding:"22px 38px 34px" }}>
@@ -6482,11 +6482,13 @@ function ManagersPage({ managers, setManagers }) {
                     </div>
                   </div>
                 </div>
+                {isAdmin && (
                 <div style={{ display:"flex", gap:8 }}>
                   <button onClick={()=>{ setEditId(m.id); setEditForm({...m}); }}
                     style={{ background:"#EAF1FA", color:"#163356", border:"1.5px solid #E2E5EA", borderRadius:4, padding:"8px 12px", fontSize:13, cursor:"pointer", fontFamily:"'Heebo',sans-serif" }}>עריכה</button>
                   <DeleteButton onClick={()=>del(m.id)} />
                 </div>
+                )}
               </div>
             )}
           </div>
@@ -9596,6 +9598,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
         {!selectedProj && globalPage === "managers" && (
           <ManagersPage
             managers={managers} setManagers={setManagers}
+            isAdmin={isAdmin}
           />
         )}
         {!selectedProj && globalPage === "milestones" && (
