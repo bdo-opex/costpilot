@@ -6421,10 +6421,10 @@ function ManagersPage({ managers, setManagers }) {
           <PrimaryButton onClick={() => setShowAdd(v => !v)}>{showAdd ? "✕ סגור" : "+ הוסף מנהל"}</PrimaryButton>
         </div>
       </div>
-      <div style={{ flex:1, overflowY:"auto", minHeight:0, padding:"22px 38px 34px", display:"flex", flexDirection:"column", gap:22 }}>
+      <div style={{ flex:1, overflowY:"auto", minHeight:0, padding:"22px 38px 34px" }}>
 
       {showAdd && (
-        <Card className="fade">
+        <Card className="fade" style={{ marginBottom:22 }}>
           <div style={{ fontWeight:700, color:"#0D0D0D", marginBottom:14, fontSize:15 }}>הוסף מנהל</div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:12, alignItems:"flex-end" }}>
             <TextInput label="שם מלא" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} />
