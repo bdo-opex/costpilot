@@ -286,7 +286,7 @@
     }
 
     // ── User Management Page (admin only) ───────────────────────────────────
-    function UserManagementPage({ currentUser, projects }) {
+    function UserManagementPage({ currentUser, projects, allData = {} }) {
       const [users, setUsers]   = useState([]);
       const [loading, setLoading] = useState(true);
       const [saving, setSaving]   = useState(null);
@@ -312,7 +312,7 @@
         const updated = users.map(u => u.uid === uid ? { ...u, ...patch } : u);
         setUsers(updated);
         const u = updated.find(x => x.uid === uid);
-        await saveUserRole(uid, { role: u.role ?? "user", projects: u.projects || [], email: u.email || "" });
+        await saveUserRole(uid, { role: u.role ?? "user", projects: u.projects || [], excludedProjects: u.excludedProjects || [], email: u.email || "" });
         setSaving(null);
       };
 
@@ -323,6 +323,16 @@
         const current = u.projects || [];
         const updated = current.includes(pid) ? current.filter(p => p !== pid) : [...current, pid];
         updateUser(uid, { projects: updated });
+      };
+
+      // הסתרה/שחזור ידני של פרויקט שהוקצה אוטומטית (דרך תפקיד מנהל). מבטל רק את ההקצאה האוטומטית.
+      const setExcluded = (uid, projId, hide) => {
+        const u = users.find(x => x.uid === uid);
+        if (!u) return;
+        const pid = String(projId);
+        const cur = (u.excludedProjects || []).map(String);
+        const updated = hide ? [...new Set([...cur, pid])] : cur.filter(p => p !== pid);
+        updateUser(uid, { excludedProjects: updated });
       };
 
       if (loading) return <div style={{ padding:40, textAlign:"right", fontFamily:"'Heebo',sans-serif" }}>טוען משתמשים...</div>;
@@ -345,7 +355,20 @@
           )}
 
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-            {users.map(u => (
+            {users.map(u => {
+              // פרויקטים שמוקצים אוטומטית כי המשתמש רשום כמנהל תכנון/ביצוע בפתיחת הפרויקט (לפי מייל).
+              const _uEmail = (u.email || "").trim().toLowerCase();
+              const _uManual = (u.projects || []).map(String);
+              const _uExcluded = (u.excludedProjects || []).map(String);
+              const _autoEligible = _uEmail ? projects.filter(p => {
+                const d = allData[p.id] || {};
+                const _isMgr = (d.planningManagerEmail || "").trim().toLowerCase() === _uEmail
+                            || (d.executionManagerEmail || "").trim().toLowerCase() === _uEmail;
+                return _isMgr && !_uManual.includes(String(p.id));
+              }) : [];
+              const _autoProjs  = _autoEligible.filter(p => !_uExcluded.includes(String(p.id)));  // אוטומטי גלוי
+              const _autoHidden = _autoEligible.filter(p =>  _uExcluded.includes(String(p.id)));  // הוסתר ידנית
+              return (
               <div key={u.uid} style={{ background:"#fff", border:"1px solid #E2E5EA", borderRadius:8, padding:"18px 20px" }}>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
                   <div>
@@ -377,7 +400,29 @@
                           </button>
                         </span>
                       ))}
-                      {(u.projects || []).length === 0 && <span style={{ fontSize:12, color:"#9A9A9A" }}>אין פרויקטים מאושרים</span>}
+                      {_autoProjs.map(p => (
+                        <span key={"auto-"+p.id} title="הורשה אוטומטית — מוגדר כמנהל הפרויקט בפתיחת הפרויקט"
+                          style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"5px 12px", borderRadius:4, fontSize:12, fontWeight:600, fontFamily:"'Heebo',sans-serif", background:"#D2EDDD", color:"#1C4532" }}>
+                          {p.name}
+                          <span style={{ fontSize:10, fontWeight:700, opacity:0.85 }}>אוטומטי · מנהל</span>
+                          <button onClick={() => setExcluded(u.uid, p.id, true)} title="הסתר פרויקט זה מהיוזר"
+                            style={{ border:"none", background:"none", cursor:"pointer", color:"#1C4532", fontSize:13, fontWeight:700, padding:0, lineHeight:1 }}>
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                      {_autoHidden.map(p => (
+                        <span key={"hid-"+p.id} title="הוסתר ידנית — למרות שהמשתמש מוגדר כמנהל הפרויקט"
+                          style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"5px 12px", borderRadius:4, fontSize:12, fontWeight:600, fontFamily:"'Heebo',sans-serif", background:"#F1F1F1", color:"#9A9A9A", textDecoration:"line-through" }}>
+                          {p.name}
+                          <span style={{ fontSize:10, fontWeight:700, opacity:0.85, textDecoration:"none" }}>מוסתר</span>
+                          <button onClick={() => setExcluded(u.uid, p.id, false)} title="החזר צפייה ליוזר"
+                            style={{ border:"none", background:"none", cursor:"pointer", color:"#163356", fontSize:14, fontWeight:700, padding:0, lineHeight:1, textDecoration:"none" }}>
+                            ↺
+                          </button>
+                        </span>
+                      ))}
+                      {_uManual.length === 0 && _autoProjs.length === 0 && _autoHidden.length === 0 && <span style={{ fontSize:12, color:"#9A9A9A" }}>אין פרויקטים מאושרים</span>}
                       <AddProjectPicker
                         projects={projects}
                         assigned={u.projects || []}
@@ -386,7 +431,8 @@
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
           </div>
         </div>
@@ -1433,11 +1479,10 @@ function QuotesTab({ rows, setRows, suppliers, highlightFieldId, budgetState, op
           workScopes={workScopes}
           onApproved={c => {
             if (!projectMeta) return;
-            const execMgr = (managers||[]).find(m => m.role === "execution");
-            const planMgr = (managers||[]).find(m => m.role === "planning");
+            // בביצוע: מנהל הביצוע; אחרת מנהל התכנון; אם לא הוגדר — ריק (לעולם לא מנהל גלובלי אקראי).
             const hasMeta = projectMeta.executionManager || projectMeta.executionManagerEmail;
-            const targetName  = hasMeta ? (projectMeta.executionManager  || execMgr?.name  || "") : (projectMeta.planningManager  || planMgr?.name  || "");
-            const targetEmail = hasMeta ? (projectMeta.executionManagerEmail || execMgr?.email || "") : (projectMeta.planningManagerEmail || planMgr?.email || "");
+            const targetName  = hasMeta ? (projectMeta.executionManager  || "") : (projectMeta.planningManager  || "");
+            const targetEmail = hasMeta ? (projectMeta.executionManagerEmail || "") : (projectMeta.planningManagerEmail || "");
             const sup = (suppliers||[]).find(s => s.name === c.name || (s.contacts||[]).some(ct => ct.email && ct.email === c.email));
             const cts = sup?.contacts || [];
             const contactLines = cts.length > 0
@@ -3370,9 +3415,10 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
     const _budgetWarnText = _bup3 >= 75 ? `\n\n${_bup3 >= 95 ? "⚠️" : "ℹ️"} ניצול התקציב שהתקבל ${_bup3.toFixed(1)}%` : "";
     if (stage === "pm") {
       const _isExec = projectMeta.status === "ביצוע";
-      const _pmMgrList = (managers||[]).find(m => m.role === (_isExec ? "execution" : "planning"));
-      const pmEmail = (_isExec ? projectMeta.executionManagerEmail : projectMeta.planningManagerEmail) || _pmMgrList?.email || "";
-      const pmName  = (_isExec ? projectMeta.executionManager      : projectMeta.planningManager     ) || _pmMgrList?.name  || "";
+      // בביצוע: מנהל הביצוע; אם לא הוגדר — מנהל התכנון. בתכנון: מנהל התכנון. אחרת ריק (לעולם לא מנהל גלובלי אקראי).
+      const _useExecPm = _isExec && (projectMeta.executionManager || projectMeta.executionManagerEmail);
+      const pmEmail = (_useExecPm ? projectMeta.executionManagerEmail : projectMeta.planningManagerEmail) || "";
+      const pmName  = (_useExecPm ? projectMeta.executionManager      : projectMeta.planningManager     ) || "";
       const pmOutro = "נא אישורך לחשבון.\n\nבברכה,\nמערכת CostPilot";
       const pmIntro = `שלום ${pmName || ""},\n\nבפרויקט: ${projectMeta.name} התקבל חשבון לאישורך עבור תחום ${sel.field||""}\nיועץ: ${sel.name}\nחשבון מס׳: ${invNum}\nסה״כ סכום: ${fmt(totalAmt)}${_budgetWarnText}`;
       const body = `${pmIntro}\n\n${pmOutro}`;
@@ -3381,8 +3427,8 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
         onSentExtra: () => setRows(prev => prev.map(r => String(r.invoiceNum||"").trim()===String(invNum).trim() ? {...r, _lastPmEmail:{body,htmlBody,subject,toEmail:pmEmail}} : r)) });
     } else if (stage === "um") {
       const _isExecUM = projectMeta.status === "ביצוע";
-      const _pmMgrListUM = (managers||[]).find(m => m.role === (_isExecUM ? "execution" : "planning"));
-      const _pmNameUM = (_isExecUM ? projectMeta.executionManager : projectMeta.planningManager) || _pmMgrListUM?.name || "";
+      const _useExecUM = _isExecUM && (projectMeta.executionManager || projectMeta.executionManagerEmail);
+      const _pmNameUM = (_useExecUM ? projectMeta.executionManager : projectMeta.planningManager) || "";
       const umEmail = (managers||[]).find(m => m.role === "unit")?.email || "";
       const umName  = (managers||[]).find(m => m.role === "unit")?.name  || "";
       const umOutro = "נא אישורך לחשבון.\n\nבברכה,\nמערכת CostPilot";
@@ -3393,8 +3439,8 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
         onSentExtra: () => setRows(prev => prev.map(r => String(r.invoiceNum||"").trim()===String(invNum).trim() ? {...r, _lastUmEmail:{body,htmlBody,subject,toEmail:umEmail}} : r)) });
     } else if (stage === "req") {
       const _isExecReq = projectMeta.status === "ביצוע";
-      const _pmMgrListReq = (managers||[]).find(m => m.role === (_isExecReq ? "execution" : "planning"));
-      const _pmNameReq = (_isExecReq ? projectMeta.executionManager : projectMeta.planningManager) || _pmMgrListReq?.name || "";
+      const _useExecReq = _isExecReq && (projectMeta.executionManager || projectMeta.executionManagerEmail);
+      const _pmNameReq = (_useExecReq ? projectMeta.executionManager : projectMeta.planningManager) || "";
       const _umNameReq = (managers||[]).find(m => m.role === "unit")?.name || "";
       const reqOutro = "נודה על אישורכם לחשבון והעברתו לתשלום.\n\nבברכה,\nמערכת CostPilot";
       const reqIntro = `שלום,\n\nבפרויקט: ${projectMeta.name} תחום ${sel.field||""} התקבל חשבון לאישורכם.\nהחשבון אושר ע"י מנהל/ת הפרויקט ${_pmNameReq} וע"י מנהל היחידה ${_umNameReq}\nיועץ: ${sel.name}\nחשבון מס׳: ${invNum}\nסה״כ סכום: ${fmt(totalAmt)}${_budgetWarnText}`;
@@ -7550,9 +7596,10 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
         zoneC.push({ ...base, key:`invc-${proj.id}-${inv.id}`, pendingSince: inv.returnedAt || inv.createdAt || inv.id });
       else if (!inv.pmApproved) {
         const _isExec2 = proj.status === "ביצוע";
-        const _pmListMgr = (managers||[]).find(m => m.role === (_isExec2 ? "execution" : "planning"));
-        const managerName  = (_isExec2 ? d.executionManager  : d.planningManager ) || _pmListMgr?.name  || "";
-        const managerEmail = (_isExec2 ? d.executionManagerEmail : d.planningManagerEmail) || _pmListMgr?.email || "";
+        // בביצוע: מנהל הביצוע; אם לא הוגדר — מנהל התכנון. בתכנון: מנהל התכנון. אחרת ריק (לעולם לא מנהל גלובלי אקראי).
+        const _useExec2 = _isExec2 && (d.executionManager || d.executionManagerEmail);
+        const managerName  = (_useExec2 ? d.executionManager  : d.planningManager ) || "";
+        const managerEmail = (_useExec2 ? d.executionManagerEmail : d.planningManagerEmail) || "";
         zoneB.push({ ...base, key:`inv1-${proj.id}-${inv.id}`, managerName,
           pendingSince: inv.pmPendingSince || inv.createdAt || inv.id,
           lastEmailAt: inv.pmLastEmailAt || null,
@@ -7570,12 +7617,12 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
             stage: "um", savedEmail: inv._lastUmEmail || null });
         else if (!inv.toMunicipality) {
           const _mIsExec = proj.status === "ביצוע";
-          const _mPmMgr = (managers||[]).find(m=>m.role===(_mIsExec?"execution":"planning"));
+          const _mUseExec = _mIsExec && (d.executionManager || d.executionManagerEmail);
           zone2.push({ ...base, key:`inv3-${proj.id}-${inv.id}`, pendingSince: inv.toMunicipalityPendingSince || inv.createdAt || inv.id,
             lastEmailAt: inv.municipalityLastEmailAt || null,
             reminderCount: inv.municipalityReminderCount || 0,
-            managerEmail: (_mIsExec ? d.executionManagerEmail : d.planningManagerEmail) || _mPmMgr?.email || "",
-            managerName: (_mIsExec ? d.executionManager : d.planningManager) || _mPmMgr?.name || "",
+            managerEmail: (_mUseExec ? d.executionManagerEmail : d.planningManagerEmail) || "",
+            managerName: (_mUseExec ? d.executionManager : d.planningManager) || "",
             stage: "municipality_invoice" });
         }
       }
@@ -7689,7 +7736,10 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
       const _unitMgrR   = (managers||[]).find(m => m.role === "unit");
       const _domainMgrR = (managers||[]).find(m => m.role === "domain");
       const _isExecR    = (d.status || item.projStatus || "") === "ביצוע";
-      const _pmMgrR     = (managers||[]).find(m => m.role === (_isExecR ? "execution" : "planning"));
+      // מנהל הפרויקט מנתוני הפרויקט: בביצוע — מנהל הביצוע ואם אין, מנהל התכנון; בתכנון — מנהל התכנון; אחרת ריק (לעולם לא מנהל גלובלי אקראי).
+      const _useExecR   = _isExecR && (d.executionManager || d.executionManagerEmail);
+      const _pmNameR    = (_useExecR ? d.executionManager      : d.planningManager)      || "";
+      const _pmEmailR   = (_useExecR ? d.executionManagerEmail : d.planningManagerEmail) || "";
       const toEmail = item.managerEmail || "";
 
       // ── increase_um: rebuild from consultant data ──────────────────────────
@@ -7797,15 +7847,15 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
           const allTableRows=[...baseContractRows2,...msRows,...siRows,...incRows];
           const tableRows=allTableRows.length>0?[...allTableRows,summaryRow]:[summaryRow];
           const rowHighlights=[...(baseContractRows2.length?[false]:[]),...(useSubItems?selSubItems.map(it=>rowKeySet.has("s-"+it.id)):fieldMilestones.map(m=>rowKeySet.has("m-"+m.id))),...selIncreases.filter(x=>Number(x.amount||0)>0).map(x=>rowKeySet.has("i-"+x.id)),false];
-          const _stTo   = item.stage === "pm" ? (toEmail || _pmMgrR?.email || "") : (_unitMgrR?.email || "");
+          const _stTo   = item.stage === "pm" ? (toEmail || _pmEmailR) : (_unitMgrR?.email || "");
           const outro = "נא אישורך לחשבון.\n\nבברכה,\nמערכת CostPilot";
           let intro;
           if (item.stage === "pm") {
-            const _pmName = item.managerName || _pmMgrR?.name || "";
+            const _pmName = item.managerName || _pmNameR;
             intro = `${greet(_pmName)}\n\nבפרויקט: ${item.projName} התקבל חשבון לאישורך עבור תחום ${invFieldName}\nיועץ: ${invConsultantName}\nחשבון מס׳: ${invNum}\nסה״כ סכום: ${fmt(totalAmt)}`;
           } else {
             const _umName2 = _unitMgrR?.name || "";
-            const _pmNameForUM = _pmMgrR?.name || "";
+            const _pmNameForUM = _pmNameR;
             intro = `${greet(_umName2)}\n\nבפרויקט: ${item.projName} התקבל חשבון לאישורך עבור תחום ${invFieldName}.\nהחשבון אושר ע"י מנהל/ת הפרויקט ${_pmNameForUM}\nיועץ: ${invConsultantName}\nחשבון מס׳: ${invNum}\nסה״כ סכום: ${fmt(totalAmt)}`;
           }
           const body = `${intro}\n\n${outro}`;
@@ -7936,7 +7986,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
           const tableRows=allTableRows.length>0?[...allTableRows,summaryRow]:[summaryRow];
           const rowHighlights=[...(baseContractRowsMI.length?[false]:[]),...(useSubItems?selSubItems.map(it=>rowKeySet.has("s-"+it.id)):fieldMilestones.map(m=>rowKeySet.has("m-"+m.id))),...selIncreases.filter(x=>Number(x.amount||0)>0).map(x=>rowKeySet.has("i-"+x.id)),false];
           const _stTo   = toEmail || "";
-          const _pmNameMunic = _pmMgrR?.name || "";
+          const _pmNameMunic = _pmNameR;
           const _umNameMunic = _unitMgrR?.name || "";
           const muniInvOutro = "נודה על אישורכם לחשבון והעברתו לתשלום.\n\nבברכה,\nמערכת CostPilot";
           const intro = `${greet("")}\n\nבפרויקט: ${item.projName} תחום ${invFieldName} התקבל חשבון לאישור\nהחשבון אושר ע"י מנהל/ת הפרויקט ${_pmNameMunic} וע"י מנהל היחידה ${_umNameMunic}\nיועץ: ${invConsultantName}\nחשבון מס׳: ${invNum}\nסה״כ סכום: ${fmt(totalAmt)}`;
@@ -8383,10 +8433,24 @@ function AppInner({ currentUser, userRole, setUserRole }) {
   const [allData, setAllData] = useState({});
   const [dataLoaded, setDataLoaded] = useState(false);
 
-  // סינון פרויקטים לפי הרשאה - אחרי שה-state מוגדר
+  // סינון פרויקטים לפי הרשאה - אחרי שה-state מוגדר.
+  // קישור חד-כיווני: מנהל פרויקט (תכנון/ביצוע) הרשום בפתיחת הפרויקט רואה אוטומטית את הפרויקט,
+  // לפי התאמת כתובת המייל שלו — מבלי לשנות הרשאות ידניות וללא כתיבה כלשהי (לא משפיע על שם המנהל).
+  const _myEmail = (currentUser?.email || userRole?.email || "").trim().toLowerCase();
+  const _myExcluded = ((userRole?.excludedProjects) || []).map(String);
+  const _isManagedByMe = (p) => {
+    if (!_myEmail) return false;
+    const d = allData[p.id] || {};
+    return (d.planningManagerEmail || "").trim().toLowerCase() === _myEmail
+        || (d.executionManagerEmail || "").trim().toLowerCase() === _myEmail;
+  };
   const visibleProjects = isAdmin
     ? projects
-    : projects.filter(p => ((userRole?.projects) || []).includes(String(p.id)));
+    : projects.filter(p => {
+        const id = String(p.id);
+        if (((userRole?.projects) || []).map(String).includes(id)) return true;  // הקצאה ידנית — תמיד גלוי
+        return _isManagedByMe(p) && !_myExcluded.includes(id);                    // הקצאה אוטומטית — אלא אם הוסתרה ידנית
+      });
 
   // מעקב גישה אחרונה לפרויקט (לצורך מיון)
   const [lastAccessed, setLastAccessed] = useState(() => {
@@ -9429,7 +9493,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
 
         {/* Global pages: dashboard / suppliers / companies / milestones */}
         {!selectedProj && globalPage === "users" && isAdmin && (
-          <UserManagementPage currentUser={currentUser} projects={projects} />
+          <UserManagementPage currentUser={currentUser} projects={projects} allData={allData} />
         )}
         {!selectedProj && globalPage === "dashboard" && (
           <DashboardPage
