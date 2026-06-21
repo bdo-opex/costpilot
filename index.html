@@ -6085,7 +6085,7 @@ function SuppliersPage({ suppliers, setSuppliers, professions, projects, allData
   const CS = { padding:"5px 8px", border:"1.5px solid #E2E5EA", borderRadius:4, fontSize:12, fontFamily:"'Heebo',sans-serif", outline:"none", width:"100%" };
 
   return (
-    <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, overflow:"hidden" }}>
+    <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0, overflow:"hidden" }}>
       <div style={{ flexShrink:0, padding:"30px 36px 0", display:"flex", flexDirection:"column", gap:20 }}>
       {/* Header */}
       <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
@@ -6301,7 +6301,7 @@ function CompaniesPage({ companies, setCompanies }) {
   };
 
   return (
-    <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, overflow:"hidden" }}>
+    <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0, overflow:"hidden" }}>
       <div style={{ flexShrink:0, padding:"34px 38px 0" }}>
         <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
           <div>
@@ -6312,11 +6312,11 @@ function CompaniesPage({ companies, setCompanies }) {
           <PrimaryButton onClick={() => setShowAdd(v => !v)}>{showAdd ? "✕ סגור" : "+ הוסף חברה עירונית"}</PrimaryButton>
         </div>
       </div>
-      <div style={{ flex:1, overflowY:"auto", minHeight:0, padding:"22px 38px 34px", display:"flex", flexDirection:"column", gap:22 }}>
+      <div style={{ flex:1, overflowY:"auto", minHeight:0, padding:"22px 38px 34px" }}>
 
       {/* Add form - collapsible */}
       {showAdd && (
-        <Card className="fade">
+        <Card className="fade" style={{ marginBottom:22 }}>
           <div style={{ fontWeight:700, color:"#0D0D0D", marginBottom:14, fontSize:15 }}>הוסף חברה עירונית</div>
           <Grid>
             <TextInput label="שם החברה" value={form.name}    onChange={e=>setForm({...form,name:e.target.value})} />
@@ -6410,7 +6410,7 @@ function ManagersPage({ managers, setManagers, isAdmin }) {
   const roleLabel = role => MANAGER_ROLES.find(r => r.value === role)?.label || role;
 
   return (
-    <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, overflow:"hidden" }}>
+    <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0, overflow:"hidden" }}>
       <div style={{ flexShrink:0, padding:"34px 38px 0" }}>
         <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
           <div>
@@ -6557,7 +6557,7 @@ function MilestonesPage({ companies, milestones, setMilestones, professions }) {
   const totalPct = companyMilestones.reduce((s,m) => s + Number(m.pct||0), 0);
 
   return (
-    <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, overflow:"hidden" }}>
+    <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0, overflow:"hidden" }}>
       <div style={{ flexShrink:0, padding:"34px 38px 0", display:"flex", flexDirection:"column", gap:22 }}>
         <div>
           <div style={{ fontSize:11, color:"#444444", fontWeight:700, letterSpacing:3, marginBottom:4 }}>גיליון גלובלי</div>
@@ -6602,12 +6602,12 @@ function MilestonesPage({ companies, milestones, setMilestones, professions }) {
         </div>
       </Card>
       </div>
-      <div style={{ flex:1, overflowY:"auto", minHeight:0, padding:"16px 38px 34px", display:"flex", flexDirection:"column", gap:22 }}>
+      <div style={{ flex:1, overflowY:"auto", minHeight:0, padding:"16px 38px 34px" }}>
 
       {/* Milestones table */}
       {selCompany && selProf && (
         <>
-          <Card style={{ padding:0, overflow:"hidden" }}>
+          <Card style={{ padding:0, overflow:"hidden", marginBottom:22 }}>
             <div style={{ padding:"12px 20px", borderBottom:"1px solid #E2E5EA", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
               <span style={{ fontWeight:700, color:"#0D0D0D" }}>
                 {companies.find(c=>c.id==selCompany)?.name} — {selProf}
@@ -7172,7 +7172,7 @@ ${rows.map((row,i)=>`<tr style="background:${i%2===0?"#fff":"#F7F8FA"}">${row.ce
   };
 
   return (
-    <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, overflow:"hidden" }}>
+    <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0, overflow:"hidden" }}>
       <div style={{ flexShrink:0, padding:"34px 38px 0" }}>
         <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between" }}>
           <div>
@@ -7369,7 +7369,7 @@ function CostsPage({ allData, projects, statsRows, suppliers }) {
   const fmt = n => n ? "" + Number(n).toLocaleString("en-US", {maximumFractionDigits:0}) : "—";
 
   return (
-    <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, overflow:"hidden" }}>
+    <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0, overflow:"hidden" }}>
       <div style={{ flexShrink:0, padding:"34px 38px 0", display:"flex", flexDirection:"column", gap:22 }}>
         <div>
           <div style={{ fontSize:11, color:"#767676", fontWeight:700, letterSpacing:3, marginBottom:4 }}>גיליון גלובלי</div>
@@ -8120,7 +8120,7 @@ function DashboardPage({ allData, projects, onNavigate, milestones, onMarkEmailS
   const visibleZones = zones.filter(z => z.items.length > 0);
 
   return (
-    <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, overflow:"hidden" }}>
+    <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0, overflow:"hidden" }}>
       {tt.visible && (
         <div style={{ position:"fixed", left:tt.x+14, top:tt.y-36, zIndex:9999, background:"#0B1F3A", color:"#fff",
           padding:"5px 12px", borderRadius:4, fontSize:12, pointerEvents:"none", maxWidth:340,
@@ -9523,7 +9523,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
       </aside>
 
       {/* ── Main ── */}
-      <main className={isAdmin?"":"view-only"} style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+      <main className={isAdmin?"":"view-only"} style={{ flex:1, minWidth:0, minHeight:0, display:"flex", flexDirection:"column", overflow:"hidden" }}>
 
         {/* Global pages: dashboard / suppliers / companies / milestones */}
         {!selectedProj && globalPage === "users" && isAdmin && (
@@ -9732,7 +9732,7 @@ function AppInner({ currentUser, userRole, setUserRole }) {
 
         {/* Project detail */}
         {selectedProj && (
-          <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, overflow:"hidden" }}>
+          <div className="fade" style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0, overflow:"hidden" }}>
             {!isAdmin && (
               <div style={{ background:"#FAF2E6", borderBottom:"2px solid #F0D4B0", padding:"8px 20px", textAlign:"center", fontSize:13, fontWeight:600, color:"#5C3D10", fontFamily:"'Heebo',sans-serif" }}>
                 👁 מצב צפייה בלבד — אין הרשאת עריכה
