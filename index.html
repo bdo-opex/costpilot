@@ -3251,6 +3251,16 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
   const templateMilestones = (sel && companyId) ? (findMilestoneTemplate(milestones, companyId, selField) || []) : [];
   const hasLocalMs = sel ? (((localMilestones||{})[selField]?.length || 0) > 0) : false;
   const fieldMilestones = hasLocalMs ? (localMilestones[selField]||[]) : templateMilestones;
+  // האם הצילום המקומי שונה מהתבנית הנוכחית (עריכה ידנית) או זהה לה (הקפאה אוטומטית בלבד)
+  const localDiffersFromTemplate = hasLocalMs && (() => {
+    const loc = (localMilestones||{})[selField] || [];
+    if (loc.length !== templateMilestones.length) return true;
+    const byId = Object.fromEntries(templateMilestones.map(m => [String(m.id), m]));
+    return loc.some(m => {
+      const t = byId[String(m.id)];
+      return !t || String(t.name) !== String(m.name) || String(t.pct) !== String(m.pct) || !!t.planOnly !== !!m.planOnly;
+    });
+  })();
   const selSubItems = sel?.subItems||[];
   const useSubItems = selSubItems.length > 0;
 
@@ -3279,6 +3289,10 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
   const addInvoice = (milestoneKey) => {
     if (!sel?.name) return;
     if (sel?.noClaims) return;
+    // הקפאת אבני הדרך של התחום בחשבון הראשון — שינוי עתידי בתבנית הגלובלית לא ישפיע על פרויקט זה
+    if (String(milestoneKey).startsWith("m-") && !hasLocalMs && templateMilestones.length > 0) {
+      setLocalMilestones({ ...(localMilestones||{}), [selField]: templateMilestones.map(m => ({ ...m })) });
+    }
     const newRow = {
       id:Date.now(), createdAt: Date.now(), pmPendingSince: Date.now(),
       consultantName:sel.name, fieldName:sel.field||"", rowKey:milestoneKey,
@@ -3982,7 +3996,9 @@ function AccountsTab({ rows, setRows, quotesRows, consultantsRows, setConsultant
             <div style={{ padding:"12px 18px", borderBottom:"1px solid #E2E5EA", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ fontWeight:700, color:"#0D0D0D" }}>אבני דרך</span>
-                {hasLocalMs && <span style={{ fontSize:11, fontWeight:700, background:"#EAF1FA", color:"#163356", borderRadius:4, padding:"2px 8px" }}>עריכה מקומית</span>}
+                {hasLocalMs && (localDiffersFromTemplate
+                  ? <span style={{ fontSize:11, fontWeight:700, background:"#EAF1FA", color:"#163356", borderRadius:4, padding:"2px 8px" }}>עריכה מקומית</span>
+                  : <span style={{ fontSize:11, fontWeight:700, background:"#EEF2F0", color:"#0E7C6A", borderRadius:4, padding:"2px 8px" }}>🔒 לפי תבנית</span>)}
               </div>
               {companyId && !editingMs && (
                 <button onClick={openMsEditor}
@@ -8734,6 +8750,43 @@ function AppInner({ currentUser, userRole, setUserRole }) {
       if (allData[id] !== prev[id]) saveProjectData(id, allData[id]);
     });
   }, [allData, dataLoaded]);
+
+  // הקפאה חד-פעמית: פרויקטים קיימים עם חשבונות בתחום וללא צילום מקומי — מקפיאים לתבנית הנוכחית,
+  // כך ששינוי עתידי בתבנית הגלובלית לא ישנה אותם רטרואקטיבית. כל פרויקט מעובד פעם אחת בלבד.
+  const freezeMigRef = React.useRef(new Set());
+  useEffect(() => {
+    if (!isAdmin || !dataLoaded) return;
+    if (!milestones || Object.keys(milestones).length === 0) return; // ממתינים שהתבניות ייטענו
+    Object.keys(allData).forEach(projId => {
+      if (freezeMigRef.current.has(projId)) return;
+      const d = allData[projId];
+      if (!d) return;
+      freezeMigRef.current.add(projId);
+      const companyId = String(d.companyId || "");
+      if (!companyId) return;
+      const existingLocal = d.localMilestones || {};
+      const accountedFields = new Set(
+        (d.accounts || [])
+          .filter(r => String(r.rowKey || "").startsWith("m-") && String(r.fieldName || "").trim())
+          .map(r => String(r.fieldName).trim())
+      );
+      const frozen = {};
+      accountedFields.forEach(field => {
+        if (existingLocal[field]) return; // לא לדרוס צילום קיים
+        const tpl = findMilestoneTemplate(milestones, companyId, field) || [];
+        if (tpl.length > 0) frozen[field] = tpl.map(m => ({ ...m }));
+      });
+      if (Object.keys(frozen).length > 0) {
+        setAllData(prev => ({
+          ...prev,
+          [projId]: {
+            ...(prev[projId] || makeProjectData()),
+            localMilestones: { ...((prev[projId] || {}).localMilestones || {}), ...frozen },
+          },
+        }));
+      }
+    });
+  }, [allData, milestones, dataLoaded]);
 
   if (!dataLoaded) return (
     <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Heebo',sans-serif", color:"#9A9A9A", fontSize:16 }}>
